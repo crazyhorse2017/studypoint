@@ -51,10 +51,7 @@ export function AppShell({ pathname, children }: { pathname: string; children: R
       <header className="sticky top-0 z-30 border-b border-border bg-page/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-6 px-4">
           <Link to="/" className="flex items-center gap-2 font-semibold text-text">
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 text-accent" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z" strokeLinejoin="round" />
-              <path d="M12 6v13.5" />
-            </svg>
+            <img src="/brand/logo.svg" alt="" width={28} height={28} className="h-7 w-7" />
             Studyflare
           </Link>
           <nav aria-label="Primary" className="hidden md:block">
