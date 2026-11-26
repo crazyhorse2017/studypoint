@@ -54,6 +54,7 @@ TYPE_PACKAGES = [
     "@types/react-dom",
     "@cloudflare/workers-types",
     "vite",
+    "jose",
 ]
 # Transitive type-only dependencies (resolved from the dependent package's package.json).
 TRANSITIVE = {"@types/react": ["csstype"]}

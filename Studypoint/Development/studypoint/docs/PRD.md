@@ -71,6 +71,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 - **AUTH-01 MUST** — Cloudflare Access protects every route, and sign-in is a one-time email PIN.
 - **AUTH-02 MUST** — The Worker verifies the `Cf-Access-Jwt-Assertion` JWT on every API request: signature against the team certs, plus `iss` and `aud`. It never trusts the email header alone.
 - **AUTH-03 MUST** — After verification, the email must also be on the `ALLOWED_EMAILS` list (school and personal address). The list is a Worker variable or secret and is never committed.
+- **AUTH-03b MUST** — **One person, several logins.** Every allowed email signs in to the **same** account and library (the single-user owner). This is stored in `user_emails`. CI and dev identities stay separate.
 - **AUTH-04 MUST** — Local dev bypass works only on localhost with an explicit dev variable. It is impossible in production.
 - **AUTH-05 MUST** — **Preview only:** a Cloudflare Access service token (`CI_SERVICE_TOKEN_ID`) maps to a dedicated CI test user for end-to-end tests, and `AI_FAKE=1` routes AI calls to recorded responses.
   A test asserts that both are unset in production (TESTING §5).

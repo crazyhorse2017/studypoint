@@ -42,6 +42,10 @@ Open question: how Prizm's code reaches GitHub without local git (TASKS T0.01).
   - **P2:** add a course by code. It looks the code up **only on that school's own website**, requires the code and title to appear word for word, saves the catalog page as a citable source, and suggests topics for Alex to accept.
   - No nationwide course-code dataset exists, and some catalogs block bots (UMBC's returned 403), so there are fallbacks: paste the URL, paste the text, or enter it manually.
 
+- **Two logins, one library** (found and fixed while building T0.15 on 2026-11-26, PRD `AUTH-03b`):
+  - Each sign-in email would otherwise have created its own user, so the school and personal logins would have shown two separate libraries.
+  - All allowed emails now link to the one owner account through the `user_emails` table.
+
 ## Cost & AI
 - **SUPERSEDES the Claude-first choice:** make the app as free as possible.
   - AI is free-first and Claude-ready: Gemini's free tier for chat, generation and OCR/vision, and Workers AI's free tier for embeddings, all behind a provider interface. Claude is the planned paid upgrade.

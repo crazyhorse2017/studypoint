@@ -117,6 +117,10 @@ def rule_erasable_ts(files: Files) -> list[Violation]:
     v += _scan(files, "ts-fn-type-return", lambda p: p.endswith((".ts", ".tsx")) and p.startswith(("src/", "tests/")),
                re.compile(r"\)\s*:\s*\([^()]*\)\s*=>\s*[\w<>\[\]|. ]+\s*\{"),
                "Function-type return annotation breaks tests/ts_strip.py. Use a type alias.")
+    # Same stripper limitation for type guards with an inline object type: `(x): x is { a: string } =>`.
+    v += _scan(files, "ts-inline-type-guard", lambda p: p.endswith((".ts", ".tsx")) and p.startswith(("src/", "tests/")),
+               re.compile(r"\)\s*:\s*\w+\s+is\s+\{"),
+               "Type guard with an inline object type breaks tests/ts_strip.py. Use a named type.")
     v += _scan(files, "ts-param-property", is_src_ts,
                re.compile(r"constructor\s*\([^)]*\b(public|private|protected|readonly)\s+\w"),
                "Constructor parameter properties are not erasable.")
@@ -307,6 +311,7 @@ PLANTED: list[tuple[str, Files]] = [
     ("ts-enum", {"src/shared/a.ts": "export enum Color { Red }"}),
     ("ts-namespace", {"src/shared/a.ts": "namespace Foo { export const x = 1; }"}),
     ("ts-param-property", {"src/shared/a.ts": "class A { constructor(private db: string) {} }"}),
+    ("ts-inline-type-guard", {"src/worker/a.ts": "xs.filter((x): x is { k: string } => x !== null);"}),
     ("ts-fn-type-return", {"tests/suites/a.test.ts": "function rng(seed: number): () => number {\n  return () => seed;\n}"}),
     ("ai-sdk-import", {"src/worker/x.ts": "import { GoogleGenAI } from '@google/genai';"}),
     ("ai-sdk-dependency", {"package.json": json.dumps({"dependencies": {"openai": "4.0.0"}})}),

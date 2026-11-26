@@ -1,31 +1,23 @@
-// Studypoint Worker entry (ARCHITECTURE §3.2).
-// The SPA is served from static assets; only /api/* reaches this code (`run_worker_first`).
-// Auth middleware (AUTH-01..05) is added in T0.12. Until then Cloudflare Access on the
-// workers.dev route (T0.07) is the only gate, and no route here returns user data.
+// Studypoint Worker entry (ARCHITECTURE §3.2). Wires the real dependencies into the app:
+// the jose Access-JWT verifier, D1 user resolution and the nightly backup cron.
+// The SPA itself is served from static assets; only /api/* reaches this code (`run_worker_first`).
 
-import { apiError, json } from './http.ts';
+import { APP_VERSION, createApp, type Env } from './app.ts';
+import { createAccessVerifier } from './auth/accessJwt.ts';
+import { runNightlyBackup } from './backup/d1.ts';
+import { ensureUser } from './users.ts';
 
-export type Env = {
-  ASSETS: Fetcher;
-};
-
-export const APP_VERSION = '0.1.0';
-
-export async function handleApi(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-
-  if (url.pathname === '/api/health') {
-    if (request.method !== 'GET') return apiError(405, 'method_not_allowed', 'Use GET for this endpoint.');
-    return json({ status: 'ok', service: 'studypoint', version: APP_VERSION });
-  }
-
-  return apiError(404, 'not_found', "That API route doesn't exist.");
-}
+const app = createApp({
+  makeVerifier: (config) => createAccessVerifier(config.issuer ?? '', config.aud ?? ''),
+  resolveUserId: async (env, identity) => (env.DB ? (await ensureUser(env.DB, identity)).id : null),
+});
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith('/api/')) return handleApi(request);
-    return env.ASSETS.fetch(request);
+  fetch: (request: Request, env: Env) => app.fetch(request, env),
+
+  // EXP-02: nightly JSON backup to R2 (cron in wrangler.jsonc). Skips quietly until D1 and R2 are bound.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!env.DB || !env.FILES) return;
+    ctx.waitUntil(runNightlyBackup(env.DB, env.FILES, APP_VERSION).then(() => undefined));
   },
 } satisfies ExportedHandler<Env>;

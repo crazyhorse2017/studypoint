@@ -65,6 +65,43 @@
     }
   }
 
+  /* WCAG 2.5.8: targets are at least 24px everywhere (component sizes), 44px on touch screens (DESIGN §3). */
+  @media (pointer: coarse) {
+    .ds-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  .ds-dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .ds-dialog[open] {
+    margin: auto;
+  }
+
+  .ds-spinner {
+    width: 1em;
+    height: 1em;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: ds-spin 0.7s linear infinite;
+  }
+
+  @keyframes ds-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ds-spinner {
+      animation-duration: 2s;
+    }
+  }
+
   .reading {
     font-family: var(--ff-reading);
     font-size: var(--fs-reading);

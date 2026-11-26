@@ -5,11 +5,24 @@
   "compatibility_date": "2026-11-20",
   // Served at studypoint.<subdomain>.workers.dev (ARCHITECTURE A2). Cloudflare Access is enabled on this route in T0.07.
   "workers_dev": true,
+  // Per-version preview URLs would bypass the Access policy on the main route. Off until the protected
+  // preview environment exists (T0.05/T0.07).
+  "preview_urls": false,
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // EXP-02: nightly backup at 08:00 UTC (about 03:00 in Maryland in winter, 04:00 in summer).
+  "triggers": { "crons": ["0 8 * * *"] },
+  // Auth (AUTH-01..05). ACCESS_TEAM_DOMAIN and ACCESS_AUD are filled in during T0.07. Until then every
+  // /api/* request returns 503 "Sign-in isn't configured yet" (fail closed). ALLOWED_EMAILS is a SECRET:
+  // set it with `wrangler secret put ALLOWED_EMAILS` or in the dashboard, never here.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  }
   // D1, R2, Vectorize, Workers AI and Workflow bindings plus the `preview` env are added in T0.05.
 }

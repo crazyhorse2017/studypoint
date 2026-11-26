@@ -74,6 +74,15 @@ CREATE TABLE users (
   created_at INTEGER NOT NULL
 );
 
+-- Every sign-in email that belongs to a user. Studypoint is single-user (PRD §2): all of Alex's allowed
+-- emails (school and personal) link to the ONE owner row, so either login shows the same library.
+-- CI and dev identities get their own users.
+CREATE TABLE user_emails (
+  email TEXT PRIMARY KEY,                  -- lowercased
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   style TEXT NOT NULL DEFAULT 'paper' CHECK (style IN ('paper','lab','midnight')),            -- UX-01, DESIGN §2.8
@@ -541,6 +550,11 @@ CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. (
   - Includes extracted passage text.
   - **Excludes** R2 binaries (they stay in R2) and vectors (re-embedded on restore).
 - **Restore** goes into an empty database only, re-creates FTS, then queues re-embedding.
+  - **As built in T0.15** (`src/worker/backup/`): restore refuses (409) unless the signed-in account has no content.
+  - It replaces the empty user row with the exported one and links the current login email to it.
+  - Inserts run parents-first (`EXPORT_TABLES`), with at most 100 bound parameters each. `sources.alt_rendition_of` is set in a second pass.
+  - Very large restores span several D1 batches. Each batch is atomic, but the whole restore isn't. If one fails partway, the account must be cleared and the restore retried.
+  - Uploaded files are validated first: format, version, known tables, plain column names (they end up in SQL), and scalar values only.
 - `export_schema_version` goes up whenever a migration changes an exported table. The importer keeps upgrade functions for older versions.
 - The nightly backup uses the same serialiser, gzip-compressed, in R2 at `backups/`.
 

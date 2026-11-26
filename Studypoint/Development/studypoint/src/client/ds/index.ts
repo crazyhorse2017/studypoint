@@ -1,0 +1,19 @@
+// Studypoint design system (DESIGN §5). Import components from here, never build ad-hoc controls.
+export { Button, IconButton } from './Button.tsx';
+export type { ButtonProps, ButtonVariant, IconButtonProps } from './Button.tsx';
+export { Switch, Checkbox } from './Toggle.tsx';
+export { Slider } from './Slider.tsx';
+export { SegmentedControl } from './SegmentedControl.tsx';
+export { Select } from './Select.tsx';
+export type { SelectOption } from './Select.tsx';
+export { RadioGroup } from './RadioGroup.tsx';
+export type { RadioOption } from './RadioGroup.tsx';
+export { TextField, TextArea } from './TextField.tsx';
+export { Tabs } from './Tabs.tsx';
+export { Menu } from './Menu.tsx';
+export type { MenuItem } from './Menu.tsx';
+export { Tooltip } from './Tooltip.tsx';
+export { FileDrop } from './FileDrop.tsx';
+export { Dialog, ConfirmDialog } from './Dialog.tsx';
+export { ToastProvider, useToast } from './Toast.tsx';
+export { cx } from './cx.ts';

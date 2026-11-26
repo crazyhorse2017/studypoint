@@ -11,6 +11,12 @@ CREATE TABLE users (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE user_emails (
+  email TEXT PRIMARY KEY,                  -- lowercased
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   style TEXT NOT NULL DEFAULT 'paper' CHECK (style IN ('paper','lab','midnight')),            -- UX-01, DESIGN §2.8

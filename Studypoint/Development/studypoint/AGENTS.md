@@ -93,7 +93,8 @@ Planning history is in `docs/PLANNING_LOG.md`, `docs/RESEARCH.md` and `docs/SOUR
 
 ### Code style
 21. **Erasable TypeScript only.** No `enum`, `namespace` or constructor parameter properties. Use string-union types that mirror the DB `CHECK` lists.
-    - The local type stripper can't parse function-type **return** annotations (`function f(): () => number {`). Use a type alias (`type Rand = () => number`). The audit flags it.
+    - The local type stripper can't parse function-type **return** annotations (`function f(): () => number {`) or type guards with an inline object type (`(x): x is { a: string } =>`). Use a named type. The audit flags both.
+    - Browsers drop `Cookie` and other forbidden headers on hand-built `Request`s. Test that kind of logic as a pure function, and cover the full path in the Workers tests in CI.
     - New test suites must be registered in `tests/js_tests.html`.
     - New schema changes go in a new migration and must keep `tests/verify_schema.py` passing. That test also checks the migrations still match DATABASE.md.
 22. **`src/worker/**` is server-only** and never imported from `src/client/**`. Shared code lives in `src/shared/` and must be pure (no bindings, no DOM).

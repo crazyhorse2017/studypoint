@@ -97,6 +97,13 @@ Open items moved to later docs: the embedding model and dimensions, and the chat
   4. Dev bypass only when `DEV_USER_EMAIL` is set **and** the host is `localhost`.
   5. **Preview env only:** an Access service-token JWT whose `common_name` equals `CI_SERVICE_TOKEN_ID` maps to the CI test user (`AUTH-05`).
 
+  **As built in T0.12** (`src/worker/auth/`). Everything fails closed:
+  - An **empty `ALLOWED_EMAILS` allows nobody**. This differs from NoteFlare, where empty means anyone Access admits.
+  - Missing Access config gives 503 everywhere except `development`.
+  - `CI_SERVICE_TOKEN_ID` or `AI_FAKE` present in production gives 503 `unsafe_config`.
+  - Unknown `/api/*` paths return 401 before 404, so routes can't be discovered without signing in.
+  - The policy is pure and tested locally. The jose verifier is injected through `createApp()` (`src/worker/app.ts`) and tested in the Workers runtime in CI.
+
   Anything else gets a 401/403.
 - **API surface (REST, JSON):** grouped by module.
   - `/api/courses`, `/topics`, `/tags`
@@ -147,7 +154,7 @@ Status is written to D1 at each step and polled by the client every 2 s while it
 - Rate limits: per-provider daily counters in D1. Exceeding one queues the work (Workflows) or returns a "free limit reached; resets at 00:00 UTC" message for interactive chat.
 
 ### 3.5 Scheduled jobs (Cron Triggers)
-- **Nightly 03:00 America/New_York:** JSON backup of all user data (same serialiser as `EXP-01`) → `backups/{date}.json.gz` in R2. Keep 30 daily and 12 monthly backups (`EXP-02`). D1 Time Travel (30 days on Paid) is the second safety net.
+- **Nightly at 08:00 UTC** (03:00 in Maryland in winter, 04:00 in summer; cron `0 8 * * *`): JSON backup of all user data (same serialiser as `EXP-01`) → `backups/{date}.json.gz` in R2. Keep 30 daily and 12 monthly backups (`EXP-02`). D1 Time Travel (30 days on Paid) is the second safety net.
 - **Nightly:** purge Vectorize entries and R2 objects of hard-deleted sources. Recompute daily analytics rollups (P3).
 
 ### 3.6 Lookup (P2) — `LKP-*`
@@ -202,6 +209,7 @@ Full schema: [[DATABASE]].
 | `ALLOWED_EMAILS` | **secret** | School + personal address. Never in the repo (`AUTH-03`) |
 | `GEMINI_API_KEY`, `TAVILY_API_KEY`, (P4) `ANTHROPIC_API_KEY` | **secrets** | Set via the dashboard or `wrangler secret put` in CI |
 | `AI_MODELS` | var (JSON) | Task → provider/model map. No hard-coded model IDs (`NFR-PORT`) |
+| `ENVIRONMENT` | var: `production` \| `preview` \| `development` | Missing or unknown values count as `production`, the strictest |
 | `DEV_USER_EMAIL` | local `.dev.vars` only | Ignored unless the host is localhost |
 | `CI_SERVICE_TOKEN_ID`, `AI_FAKE` | vars, **preview env only** | CI end-to-end auth and deterministic AI (`AUTH-05`, TESTING §5). A test asserts they're absent in production |
 | Bindings | `DB` (D1), `FILES` (R2), `VEC` (Vectorize), `AI` (Workers AI), `INGEST` (Workflow), `ASSETS` | Declared in `wrangler.jsonc` |

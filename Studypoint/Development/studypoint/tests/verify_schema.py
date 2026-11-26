@@ -187,6 +187,127 @@ def _():
     expect_error(db, ins, ("b",), fragment="UNIQUE")
 
 
+def json_dump(row: tuple) -> str:
+    return "|".join("" if v is None else str(v) for v in row)
+
+
+def export_tables() -> list[tuple[str, str]]:
+    """Read EXPORT_TABLES from src/worker/backup/tables.ts and expand viaParent(...) into SQL."""
+    src = (ROOT / "src" / "worker" / "backup" / "tables.ts").read_text(encoding="utf-8")
+    body = src[src.index("EXPORT_TABLES"):src.index("];", src.index("EXPORT_TABLES"))]
+
+    def via(m: re.Match[str]) -> str:
+        return f"{m.group(1)} IN (SELECT id FROM {m.group(2)} WHERE user_id = ?1)"
+
+    out = []
+    for name, scope in re.findall(r"\{ name: '(\w+)', scope: (.+?) \},?\n", body):
+        scope = re.sub(r"viaParent\('(\w+)', '(\w+)'\)", via, scope)
+        scope = scope.replace("${", "").replace("}", "").strip("`'")
+        out.append((name, scope))
+    return out
+
+
+@check("backup: EXPORT_TABLES covers every user table, parents before children")
+def _():
+    tables = [t for t, _ in export_tables()]
+    db = fresh_db()
+    real = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+    expected = {t for t in real if not t.startswith("passages_fts")} - {"backups", "schema_meta"}
+    assert set(tables) == expected, f"missing: {sorted(expected - set(tables))}; extra: {sorted(set(tables) - expected)}"
+    pos = {t: i for i, t in enumerate(tables)}
+    for t in tables:
+        for row in db.execute(f"PRAGMA foreign_key_list({t})").fetchall():
+            parent = row[2]
+            if parent != t:
+                assert pos[parent] < pos[t], f"{t} is listed before its parent {parent}"
+
+
+def seed_everything(db: sqlite3.Connection, uid: str, email: str) -> None:
+    """A small synthetic library touching most tables, for the export/restore round trip. Test-only."""
+    q = db.execute
+    q("INSERT INTO users (id, email, created_at) VALUES (?, ?, 1)", (uid, email))
+    q("INSERT INTO user_emails (email, user_id, created_at) VALUES (?, ?, 1)", (email, uid))
+    q("INSERT INTO settings (user_id, updated_at) VALUES (?, 1)", (uid,))
+    p = uid + "-"
+    q("INSERT INTO courses (id, user_id, name, institution_name, created_at, updated_at) VALUES (?, ?, 'Course', 'School', 1, 1)", (p + "c", uid))
+    q("INSERT INTO units (id, course_id, name, position) VALUES (?, ?, 'Unit', 0)", (p + "un", p + "c"))
+    q("INSERT INTO topics (id, course_id, unit_id, name, position, created_at) VALUES (?, ?, ?, 'Topic', 0, 1)", (p + "t", p + "c", p + "un"))
+    q("INSERT INTO tags (id, user_id, name) VALUES (?, ?, 'tag')", (p + "g", uid))
+    for sid, alt in ((p + "s1", None), (p + "s2", None)):
+        q("""INSERT INTO sources (id, user_id, course_id, title, kind, origin, privacy, alt_rendition_of, created_at, updated_at)
+             VALUES (?, ?, ?, 'Source', 'pdf', 'upload', 'published', ?, 1, 1)""", (sid, uid, p + "c", alt))
+    q("UPDATE sources SET alt_rendition_of = ? WHERE id = ?", (p + "s2", p + "s1"))
+    q("INSERT INTO entity_tags (tag_id, entity_type, entity_id) VALUES (?, 'source', ?)", (p + "g", p + "s1"))
+    q("INSERT INTO source_topics (source_id, topic_id) VALUES (?, ?)", (p + "s1", p + "t"))
+    q("""INSERT INTO source_versions (id, source_id, version_no, content_hash, r2_key, mime, bytes, status, created_at)
+         VALUES (?, ?, 1, 'h', 'k', 'application/pdf', 1, 'ready', 1)""", (p + "v", p + "s1"))
+    q("""INSERT INTO locations (id, source_version_id, ordinal, kind, label, extraction, content_hash)
+         VALUES (?, ?, 1, 'page', 'p. 1', 'text', 'h')""", (p + "l", p + "v"))
+    q("""INSERT INTO passages (id, user_id, source_id, source_version_id, location_id, ordinal, text, content_hash, token_count, privacy, citeable)
+         VALUES (?, ?, ?, ?, ?, 1, 'Bernoulli relates pressure and velocity', 'h', 5, 'published', 1)""", (p + "p", uid, p + "s1", p + "v", p + "l"))
+    q("INSERT INTO generations (id, user_id, task, provider, model, prompt_version, effective_privacy, created_at) VALUES (?, ?, 'gen_cards', 'gemini', 'm', 'gen_cards@1', 'published', 1)", (p + "gen", uid))
+    q("INSERT INTO cards (id, user_id, course_id, type, front_md, origin, generation_id, created_at, updated_at) VALUES (?, ?, ?, 'basic', 'Q', 'ai', ?, 1, 1)", (p + "k", uid, p + "c", p + "gen"))
+    q("INSERT INTO card_topics (card_id, topic_id) VALUES (?, ?)", (p + "k", p + "t"))
+    q("INSERT INTO card_sources (card_id, passage_id, quote) VALUES (?, ?, 'Bernoulli relates')", (p + "k", p + "p"))
+    q("INSERT INTO card_states (card_id, user_id, state, due_at) VALUES (?, ?, 'new', 1)", (p + "k", uid))
+    q("INSERT INTO plan_blocks (id, user_id, day, planned_minutes, focus_json, reason, created_at) VALUES (?, ?, '2027-01-01', 20, '{}', 'r', 1)", (p + "pb", uid))
+    q("INSERT INTO study_sessions (id, user_id, plan_block_id, started_at) VALUES (?, ?, ?, 1)", (p + "ss", uid, p + "pb"))
+    q("""INSERT INTO review_log (id, user_id, card_id, variant, rating, reviewed_at, state_before, scheduled_days, fsrs_version, params_hash, session_id, client_id)
+         VALUES (?, ?, ?, 'main', 3, 1, 'new', 1, 'fsrs-6', 'p', ?, ?)""", (p + "r", uid, p + "k", p + "ss", p + "client"))
+    q("INSERT INTO source_change_flags (id, user_id, item_type, item_id, old_passage_id, change, created_at) VALUES (?, ?, 'card', ?, ?, 'removed', 1)", (p + "f", uid, p + "k", p + "p"))
+    q("INSERT INTO conversations (id, user_id, course_id, title, mode, created_at, updated_at) VALUES (?, ?, ?, 'Chat', 'direct', 1, 1)", (p + "cv", uid, p + "c"))
+    q("INSERT INTO messages (id, conversation_id, role, content_md, created_at) VALUES (?, ?, 'assistant', 'A', 1)", (p + "m", p + "cv"))
+    q("INSERT INTO message_citations (id, message_id, passage_id, quote, verified) VALUES (?, ?, ?, 'Bernoulli relates', 1)", (p + "mc", p + "m", p + "p"))
+    q("INSERT INTO questions (id, user_id, format, stem_md, payload_json, origin, created_at) VALUES (?, ?, 'tf', 'S', '{}', 'manual', 1)", (p + "q", uid))
+    q("INSERT INTO quizzes (id, user_id, kind, title, config_json, created_at) VALUES (?, ?, 'quiz', 'Q', '{}', 1)", (p + "qz", uid))
+    q("INSERT INTO quiz_items (quiz_id, position, question_id) VALUES (?, 0, ?)", (p + "qz", p + "q"))
+    q("INSERT INTO attempts (id, user_id, question_id, quiz_id, response_json, final_score, answered_at, client_id) VALUES (?, ?, ?, ?, '{}', 1, 1, ?)", (p + "a", uid, p + "q", p + "qz", p + "ac"))
+    q("INSERT INTO mastery (user_id, topic_id, updated_at) VALUES (?, ?, 1)", (uid, p + "t"))
+    q("INSERT INTO deadlines (id, user_id, course_id, title, kind, due_at, origin, created_at) VALUES (?, ?, ?, 'Exam', 'exam', 1, 'manual', 1)", (p + "d", uid, p + "c"))
+    q("INSERT INTO deadline_topics (deadline_id, topic_id) VALUES (?, ?)", (p + "d", p + "t"))
+
+
+@check("backup: export scopes select only this user's rows, and export -> restore round-trips")
+def _():
+    tables = export_tables()
+    src = fresh_db()
+    seed_everything(src, "alex", "alex@example.com")
+    seed_everything(src, "other", "other@example.com")  # must NOT leak into Alex's export
+    exported: dict[str, tuple[list[str], list[tuple]]] = {}
+    for name, scope in tables:
+        cur = src.execute(f"SELECT * FROM {name} WHERE {scope}", ("alex",))
+        cols = [c[0] for c in cur.description]
+        rows = cur.fetchall()
+        exported[name] = (cols, rows)
+        for row in rows:
+            assert "other" not in json_dump(row), f"{name}: another user's row leaked into the export: {row}"
+    assert exported["passages"][1] and exported["message_citations"][1] and exported["deadline_topics"][1]
+
+    dst = fresh_db()
+    deferred = {"sources": ["alt_rendition_of"]}
+    updates = []
+    for name, _ in tables:  # restore in list order, as planRestore does
+        cols, rows = exported[name]
+        for row in rows:
+            values = list(row)
+            for col in deferred.get(name, []):
+                i = cols.index(col)
+                if values[i] is not None:
+                    updates.append((name, col, values[i], values[cols.index("id")]))
+                values[i] = None
+            dst.execute(f"INSERT INTO {name} ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", values)
+    for name, col, value, rid in updates:
+        dst.execute(f"UPDATE {name} SET {col} = ? WHERE id = ?", (value, rid))
+    dst.execute("INSERT INTO passages_fts(passages_fts) VALUES ('rebuild')")
+    for name, scope in tables:
+        a = sorted(src.execute(f"SELECT * FROM {name} WHERE {scope}", ("alex",)).fetchall(), key=repr)
+        b = sorted(dst.execute(f"SELECT * FROM {name} WHERE {scope}", ("alex",)).fetchall(), key=repr)
+        assert a == b, f"{name} differs after restore"
+    hit = dst.execute("SELECT rowid FROM passages_fts WHERE passages_fts MATCH 'bernoulli'").fetchall()
+    assert len(hit) == 1, "FTS index not rebuilt"
+    assert dst.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
 def main() -> int:
     for ok, name, detail in results:
         print(f"{'PASS' if ok else 'FAIL'}: {name}" + (f"\n  {detail}" if detail else ""))

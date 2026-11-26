@@ -29,6 +29,14 @@ This doc covers **how** and **in what order** Studypoint gets built: environment
 | **CI** | none (ephemeral) | Miniflare/workerd local bindings inside `@cloudflare/vitest-pool-workers` | every push and PR | n/a |
 | **Local (Alex's PC)** | none | none; pure-logic tests only | n/a | n/a |
 
+**As set up on 2026-11-26:**
+- The GitHub repo `studypoint` holds the project at `Studypoint/Development/studypoint/` (the same layout as the vault).
+- **Workers Builds** uses root directory `/Studypoint/Development/studypoint`, and its build command runs the checks before building:
+  `npm run typecheck && python3 tests/verify_repo.py && python3 tests/verify_schema.py && python3 tools/check_contrast.py && npm run build`.
+  A failing check blocks the deploy. The build image has Python 3.14. Browser-based JS tests can't run there (no Chrome), so they stay local until GitHub Actions is active.
+- **GitHub Actions** only reads `.github/workflows/` at the repo root, so the nested workflows don't run yet. Moving the project to the repo root (or adding a root workflow with `working-directory`) turns them on.
+- Live at `https://studypoint.r279.workers.dev`. Preview URLs are off until the protected preview environment exists.
+
 There's no `wrangler dev` locally because there's no Node. The dev loop is: **edit → local Python checks → push branch → CI + preview deploy → check on the preview URL**.
 
 ## 3. Workflow
@@ -64,6 +72,7 @@ Workers Paid is needed before P1 ingestion, not before P0.
 - react 19.3.1, vite 8.3.8, @vitejs/plugin-react 6.3.0, @cloudflare/vite-plugin 1.70.2, wrangler 4.168.0, @cloudflare/workers-types 5.20261125.1, tailwindcss and @tailwindcss/vite 4.3.5.
 - **TypeScript is pinned to 6.0.3, not 7.x.** TypeScript 7 is the native-Go compiler. It ships platform binaries and no `lib/typescript.js`, so it can't run inside the browser-based local type check. Its unsigned binaries would also be blocked by Smart App Control. CI and the local check use the same 6.0.3.
 - **Vitest must stay on 4.x** (4.1.12 when added). `@cloudflare/vitest-pool-workers` 0.23 requires `vitest ^4.1`, but Vitest's latest is 5.x.
+- jose 6.2.18 (MIT, no dependencies), added in T0.12 for Access JWT verification.
 - **Lockfile:** there's no local npm. Run the `Generate lockfile` workflow once (Actions tab), then upload its `package-lock.json`. Until then, CI uses `npm install` with the exact pins.
 
 Rules:
