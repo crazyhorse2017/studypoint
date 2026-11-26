@@ -1,11 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { DEFAULT_STYLE, applyAppearance } from './theme.ts';
+import { initSettings } from './settingsStore.ts';
 import './styles.css';
 
-// Defaults until settings load from the API (T0.20). Paper is the default style (DESIGN §2.8).
-applyAppearance(DEFAULT_STYLE, 'system');
+// Paint with cached settings (or Paper defaults) right away, then load the saved copy (T0.20).
+void initSettings();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element #root is missing from index.html');

@@ -1,14 +1,38 @@
-// Placeholder shell (T0.02). The real app shell, routing and first-run setup arrive in T0.19 and T1.24.
-// The app ships blank (LIB-12): no courses, subjects or sample content, ever.
+// App routes (T0.19). The app ships blank (LIB-12): no courses, subjects or sample content, ever.
+
+import { lazy, Suspense, type ReactNode } from 'react';
+import { ToastProvider } from './ds/index.ts';
+import { matchPath, useFocusMainHeading, useLocation } from './router.ts';
+import { AppShell } from './shell/AppShell.tsx';
+import { ComingSoonPage, NotFoundPage, TodayPage } from './pages/TodayPage.tsx';
+import { SettingsPage } from './pages/SettingsPage.tsx';
+
+// Gallery: dev/preview only. Vite replaces import.meta.env at build time, so in production this is
+// `false && …` and the gallery chunk is never built (checked in CI).
+const SHOW_GALLERY = import.meta.env.DEV || import.meta.env.VITE_DS_GALLERY === 'true';
+const GalleryPage = SHOW_GALLERY ? lazy(() => import('./pages/GalleryPage.tsx')) : null;
+
+type RouteDef = { path: string; render: () => ReactNode };
+
+const ROUTES: readonly RouteDef[] = [
+  { path: '/', render: () => <TodayPage /> },
+  { path: '/library', render: () => <ComingSoonPage title="Library" what="Your courses, files and notes will live here. Uploading arrives in the next phase." /> },
+  { path: '/review', render: () => <ComingSoonPage title="Review" what="Flashcard reviews, scheduled with FSRS, arrive in the next phase." /> },
+  { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
+  { path: '/settings', render: () => <SettingsPage /> },
+  ...(GalleryPage ? [{ path: '/ds', render: () => <GalleryPage /> }] : []),
+];
 
 export function App() {
+  const { pathname } = useLocation();
+  useFocusMainHeading(pathname);
+  const route = ROUTES.find((r) => matchPath(r.path, pathname) !== null);
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-[68ch] flex-col justify-center gap-4 px-6">
-      <h1 className="text-[2.125rem] leading-tight font-semibold text-text">Studypoint</h1>
-      <p className="reading text-text-2">
-        Studypoint is being built. Once it's ready, you'll choose your school and add your first course from your own
-        files, links and lookups.
-      </p>
-    </main>
+    <ToastProvider>
+      <AppShell pathname={pathname}>
+        <Suspense fallback={<p className="text-text-2">Loading…</p>}>{route ? route.render() : <NotFoundPage />}</Suspense>
+      </AppShell>
+    </ToastProvider>
   );
 }

@@ -23,7 +23,7 @@ Tables for later phases stay empty until their features ship.
   - Sources, cards and questions are **soft-deleted** (`deleted_at`). A nightly job hard-deletes them after 30 days, along with their R2 objects and vectors.
   - `review_log` and `attempts` are **append-only** and are never deleted while their item exists.
 - **Foreign keys:** declared everywhere, with `ON DELETE CASCADE` only where a child has no meaning without its parent.
-  **To verify in P0:** that D1 enforces FKs by default. A migration test asserts `PRAGMA foreign_keys` = 1.
+  **Verified 2026-11-26:** D1 enforces FKs by default. A probe insert with an unknown `user_id` was rejected on both production and preview.
 - **D1 limits to respect:**
   - 2 MB per row or string
   - 100 KB per SQL statement
@@ -90,7 +90,7 @@ CREATE TABLE settings (
   home_institution_name TEXT,               -- name snapshot (directory) or typed name ("Not listed")
   home_institution_domain TEXT,             -- e.g. 'umbc.edu'; used for catalog lookups (INS-03)
   theme TEXT NOT NULL DEFAULT 'system' CHECK (theme IN ('system','light','dark')),
-  reading_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(reading_json)),   -- font, spacing, width (UX-03)
+  reading_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(reading_json)),   -- reading + appearance prefs: font, sizePct, letterSpacingEm, lineHeight, widthCh, reduceMotion, shortcuts (UX-03; validated by src/shared/settings.ts)
   daily_minutes INTEGER NOT NULL DEFAULT 20 CHECK (daily_minutes BETWEEN 5 AND 600),   -- CRD-06
   target_retention REAL NOT NULL DEFAULT 0.90 CHECK (target_retention BETWEEN 0.70 AND 0.97), -- CRD-05
   fsrs_version TEXT NOT NULL DEFAULT 'fsrs-6',

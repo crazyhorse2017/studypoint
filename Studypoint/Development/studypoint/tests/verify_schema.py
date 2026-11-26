@@ -308,6 +308,34 @@ def _():
     assert dst.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
+@check("search: the quoted-OR query format from src/shared/retrieval.ts works in FTS5, incl. hostile input")
+def _():
+    db = fresh_db()
+    seed_minimal(db)
+    ins = """INSERT INTO passages (id, user_id, source_id, source_version_id, location_id, ordinal, text, content_hash,
+             token_count, privacy, citeable) VALUES (?, 'u1', 's1', 'v1', 'l1', ?, ?, 'h', 5, 'published', 1)"""
+    db.execute(ins, ("p1", 1, "Entropy production in irreversible processes"))
+    db.execute(ins, ("p2", 2, "Heat engines and the Carnot efficiency"))
+    q = lambda s: [r[0] for r in db.execute(  # noqa: E731
+        "SELECT p.id FROM passages_fts JOIN passages p ON p.rowid = passages_fts.rowid WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts), p.id", (s,))]
+    assert q('"entropy" OR "carnot"') == ["p1", "p2"] or q('"entropy" OR "carnot"') == ["p2", "p1"]
+    assert q('"heat" OR "nothinglikethis"') == ["p2"]
+    # Hostile-looking terms are just words once quoted (ftsQuery keeps only letters/digits and doubles quotes).
+    assert q('"near" OR "text" OR "and"') == ["p2"], "quoted keywords are plain terms"
+
+
+@check("settings: the Worker's upsert SQL runs and updates in place (T0.20)")
+def _():
+    src = (ROOT / "src" / "worker" / "settings.ts").read_text(encoding="utf-8")
+    sql = re.search(r"`(INSERT INTO settings.*?)`", src, re.S).group(1)
+    db = fresh_db()
+    db.execute("INSERT INTO users (id, email, created_at) VALUES ('u1', 'ci@studypoint.invalid', 1)")
+    db.execute(sql, ("u1", "lab", "dark", '{"sizePct":120}', 5))
+    db.execute(sql, ("u1", "midnight", "system", '{"sizePct":130}', 6))
+    rows = db.execute("SELECT style, theme, reading_json, updated_at FROM settings").fetchall()
+    assert rows == [("midnight", "system", '{"sizePct":130}', 6)], rows
+
+
 def main() -> int:
     for ok, name, detail in results:
         print(f"{'PASS' if ok else 'FAIL'}: {name}" + (f"\n  {detail}" if detail else ""))

@@ -102,10 +102,23 @@
     }
   }
 
+  /* Reading text (DESIGN §2.6, UX-03). The user's font choice overrides the style's reading font. */
   .reading {
-    font-family: var(--ff-reading);
+    font-family: var(--ff-reading-override, var(--ff-reading));
     font-size: var(--fs-reading);
     line-height: var(--lh-reading);
+    letter-spacing: var(--ls-reading, 0);
     max-width: var(--reading-width);
+  }
+
+  /* Skip link: hidden until focused (WCAG 2.4.1). */
+  .skip-link {
+    position: absolute;
+    left: var(--s-4);
+    top: -100px;
+    z-index: 60;
+  }
+  .skip-link:focus {
+    top: var(--s-4);
   }
 }

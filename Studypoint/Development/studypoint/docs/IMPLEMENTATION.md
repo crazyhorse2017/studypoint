@@ -36,6 +36,14 @@ This doc covers **how** and **in what order** Studypoint gets built: environment
   A failing check blocks the deploy. The build image has Python 3.14. Browser-based JS tests can't run there (no Chrome), so they stay local until GitHub Actions is active.
 - **GitHub Actions** only reads `.github/workflows/` at the repo root, so the nested workflows don't run yet. Moving the project to the repo root (or adding a root workflow with `working-directory`) turns them on.
 - Live at `https://studypoint.r279.workers.dev`. Preview URLs are off until the protected preview environment exists.
+- **Sign-in (T0.07):**
+  - Cloudflare Access app "Studypoint" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
+  - Email-PIN login only, 30-day sessions, and the "Studypoint owner" policy listing Alex's two emails.
+  - The app re-checks the same list from the `ALLOWED_EMAILS` Worker secret.
+  - To add or remove an email, change both the Access policy and the secret.
+- **Storage (T0.05 part 1):** D1 `studypoint-db` / `studypoint-preview` and Vectorize `passages-v1` / `passages-preview`, with IDs in `wrangler.jsonc`.
+  - `0001_init.sql` was applied through the D1 API and recorded in `d1_migrations` (the same table wrangler uses), so `wrangler d1 migrations apply` will continue from 0002.
+  - Once the uploaded repo includes the D1 binding, the deploy command becomes `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`.
 
 There's no `wrangler dev` locally because there's no Node. The dev loop is: **edit → local Python checks → push branch → CI + preview deploy → check on the preview URL**.
 

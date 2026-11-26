@@ -6,6 +6,16 @@ import { readAuthConfig, type AuthConfig, type AuthEnv, type Identity } from './
 import { ExportFormatError, gunzipJson, parseExportDocument } from './backup/format.ts';
 import { RestoreRefused, exportUser, restoreUser } from './backup/d1.ts';
 import { apiError, json } from './http.ts';
+import { getAppearance, patchAppearance } from './settings.ts';
+
+/** Small JSON bodies only (settings and similar). Imports have their own path. */
+const MAX_JSON_BYTES = 64 * 1024;
+
+async function readJson(request: Request): Promise<unknown> {
+  const text = await request.text();
+  if (text.length > MAX_JSON_BYTES) throw new SyntaxError('Body too large');
+  return JSON.parse(text);
+}
 
 export const APP_VERSION = '0.1.0';
 
@@ -14,6 +24,7 @@ export type Env = AuthEnv & {
   /** D1, R2 and the rest are bound in T0.05; routes that need them answer 503 until then. */
   DB?: D1Database;
   FILES?: R2Bucket;
+  VEC?: VectorizeIndex;
 };
 
 export type RequestContext = {
@@ -44,6 +55,29 @@ export const ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/api/me',
     handler: ({ identity }) => json({ email: identity.email, via: identity.via }),
+  },
+  {
+    // UX-01/03: appearance and reading settings.
+    method: 'GET',
+    path: '/api/settings',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json(await getAppearance(env.DB, userId));
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/settings',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "The settings update couldn't be read.");
+      }
+      return json(await patchAppearance(env.DB, userId, body));
+    },
   },
   {
     // EXP-01: full JSON export of everything.

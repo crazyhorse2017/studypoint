@@ -2,8 +2,9 @@
 // Style and theme are separate settings. "system" follows the OS; if the OS states no
 // preference, each style falls back to its natural theme (Paper and Lab: light, Midnight: dark).
 
-export type StyleName = 'paper' | 'lab' | 'midnight';
-export type ThemePref = 'system' | 'light' | 'dark';
+import { readingCssVars, type ReadingPrefs, type StyleName, type ThemePref } from '../shared/settings.ts';
+
+export type { StyleName, ThemePref };
 export type ResolvedTheme = 'light' | 'dark';
 export type OsScheme = 'light' | 'dark' | 'no-preference';
 
@@ -37,6 +38,15 @@ export function readOsScheme(): OsScheme {
   if (matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
   if (matchMedia('(prefers-color-scheme: light)').matches) return 'light';
   return 'no-preference';
+}
+
+/** Apply reading preferences (UX-03) and reduce-motion to <html> as CSS custom properties / attributes. */
+export function applyReading(prefs: ReadingPrefs, root: HTMLElement = document.documentElement): void {
+  for (const [name, value] of Object.entries(readingCssVars(prefs))) {
+    if (value === null) root.style.removeProperty(name);
+    else root.style.setProperty(name, value);
+  }
+  root.dataset['reduceMotion'] = prefs.reduceMotion ? 'true' : 'false';
 }
 
 /** Apply a style and theme to <html>. Tokens in styles/tokens.css key off these attributes. */

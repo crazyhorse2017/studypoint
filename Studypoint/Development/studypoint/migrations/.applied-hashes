@@ -1,0 +1,3 @@
+# Migrations applied to production D1. tests/verify_repo.py fails if any of these files changes.
+# name sha256
+0001_init.sql 01ea128524a13c61ac3ee9c3601644922c2c563bac7d2fef86aa0b7fa31782b8

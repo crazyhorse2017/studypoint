@@ -16,13 +16,44 @@
   "observability": { "enabled": true },
   // EXP-02: nightly backup at 08:00 UTC (about 03:00 in Maryland in winter, 04:00 in summer).
   "triggers": { "crons": ["0 8 * * *"] },
-  // Auth (AUTH-01..05). ACCESS_TEAM_DOMAIN and ACCESS_AUD are filled in during T0.07. Until then every
-  // /api/* request returns 503 "Sign-in isn't configured yet" (fail closed). ALLOWED_EMAILS is a SECRET:
-  // set it with `wrangler secret put ALLOWED_EMAILS` or in the dashboard, never here.
+  // Auth (AUTH-01..05), set up in T0.07 on 2026-11-26: Access app "Studypoint" (email PIN, 30-day sessions,
+  // "Studypoint owner" policy). These two values are public identifiers, not secrets. ALLOWED_EMAILS is a
+  // Worker SECRET (already set on the account); never put it here.
   "vars": {
     "ENVIRONMENT": "production",
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "ACCESS_TEAM_DOMAIN": "shrill-hat-b870.cloudflareaccess.com",
+    "ACCESS_AUD": "70ec5742ef21a1fbb6e1514cebcf3ef8a1719921cf5befd0c2b74290dfbb2ff4"
+  },
+  // T0.05: storage. Created 2026-11-26; 0001_init.sql applied (schema fingerprint verified against the file).
+  // R2 (FILES), Workers AI (AI) and the ingestion Workflow are added once Workers Paid is active.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "studypoint-db",
+      "database_id": "a2d32ddc-edcf-4c58-9943-89c43355e4ce",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vectorize": [{ "binding": "VEC", "index_name": "passages-v1" }],
+  "env": {
+    // Preview: separate data everywhere (IMPLEMENTATION §2). Bindings and vars are not inherited, so all are repeated.
+    "preview": {
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "ENVIRONMENT": "preview",
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "studypoint-preview",
+          "database_id": "3239de5f-bc52-43e5-949a-5ed8e2ff2b52",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vectorize": [{ "binding": "VEC", "index_name": "passages-preview" }]
+    }
   }
-  // D1, R2, Vectorize, Workers AI and Workflow bindings plus the `preview` env are added in T0.05.
 }
