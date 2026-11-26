@@ -541,6 +541,14 @@ CREATE TABLE allowed_emails (
   added_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
 );
+
+-- Added in migration 0003 (2026-11-26): deployment settings written by first-run setup (AUTH-07).
+-- Used only when the ACCESS_* vars are left as "todo" (one-click deploys). Never holds a token. Not exported.
+CREATE TABLE app_config (
+  key TEXT PRIMARY KEY CHECK (key IN ('team_domain','aud','account_id','app_id','policy_id','brand_app_id','setup_at')),
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 ```
 
 ## 4. Key queries

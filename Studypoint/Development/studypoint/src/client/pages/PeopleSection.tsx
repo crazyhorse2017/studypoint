@@ -15,18 +15,26 @@ export function PeopleSection() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  // Without a CF_ACCESS_API_TOKEN secret, each change needs a token pasted here (used once, never stored).
+  const [tokenStored, setTokenStored] = useState(true);
+  const [token, setToken] = useState('');
 
   useEffect(() => {
-    api<{ people: Person[] }>('GET', '/api/people')
-      .then((r) => setPeople(r.people))
+    api<{ people: Person[]; tokenStored?: boolean }>('GET', '/api/people')
+      .then((r) => {
+        setPeople(r.people);
+        setTokenStored(r.tokenStored !== false);
+      })
       .catch((e) => setLoadError(e instanceof Error ? e.message : 'Something went wrong.'));
   }, []);
+
+  const withToken = (body: Record<string, unknown>) => (tokenStored ? body : { ...body, token });
 
   const add = async () => {
     setError(null);
     setSaving(true);
     try {
-      const r = await api<{ people: Person[] }>('POST', '/api/people', { email });
+      const r = await api<{ people: Person[] }>('POST', '/api/people', withToken({ email }));
       setPeople(r.people);
       toast.show({ message: `${email.trim().toLowerCase()} can now sign in` });
       setEmail('');
@@ -39,7 +47,7 @@ export function PeopleSection() {
 
   const remove = async (who: string) => {
     try {
-      const r = await api<{ people: Person[] }>('DELETE', `/api/people/${encodeURIComponent(who)}`);
+      const r = await api<{ people: Person[] }>('DELETE', `/api/people/${encodeURIComponent(who)}`, tokenStored ? undefined : { token });
       setPeople(r.people);
       toast.show({ message: `${who} can no longer sign in` });
     } catch (e) {
@@ -78,6 +86,16 @@ export function PeopleSection() {
         </ul>
       ) : !loadError ? (
         <p className="text-text-2">Loading…</p>
+      ) : null}
+      {!tokenStored ? (
+        <TextField
+          label="Cloudflare API token"
+          type="password"
+          autoComplete="off"
+          description="Needed to change who can sign in (permission: Access: Apps and Policies → Edit). Used once per change and never stored."
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
       ) : null}
       <form
         className="flex flex-wrap items-end gap-2"

@@ -213,8 +213,9 @@ def _():
     db = fresh_db()
     real = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
     # System tables are not part of a person's export: backups log, schema version, and the app-wide
-    # sign-in list (allowed_emails, AUTH-06), which belongs to the deployment, not to one user's study data.
-    expected = {t for t in real if not t.startswith("passages_fts")} - {"backups", "schema_meta", "allowed_emails"}
+    # sign-in list (allowed_emails, AUTH-06) and setup values (app_config, AUTH-07), which belong to the
+    # deployment, not to one user's study data.
+    expected = {t for t in real if not t.startswith("passages_fts")} - {"backups", "schema_meta", "allowed_emails", "app_config"}
     assert set(tables) == expected, f"missing: {sorted(expected - set(tables))}; extra: {sorted(set(tables) - expected)}"
     pos = {t: i for i, t in enumerate(tables)}
     for t in tables:

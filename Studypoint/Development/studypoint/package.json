@@ -12,7 +12,16 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy && wrangler d1 migrations apply DB --remote"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": { "description": "D1 database for your courses, notes and cards. Created automatically." },
+      "ALLOWED_EMAILS": { "description": "**Your email address.** Only these emails (comma-separated) can sign in, and they own this Studyflare." },
+      "ACCESS_TEAM_DOMAIN": { "description": "Keep `todo`. On first open, Studyflare sets up its Cloudflare Access sign-in and fills this in." },
+      "ACCESS_AUD": { "description": "Keep `todo`. Filled in by Studyflare's first-run setup." },
+      "ENVIRONMENT": { "description": "Keep `production`." }
+    }
   },
   "dependencies": {
     "jose": "6.2.18",

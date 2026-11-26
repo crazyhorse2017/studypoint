@@ -24,8 +24,15 @@ export function normaliseEmail(input: unknown): string | null {
   return e.length <= 254 && EMAIL_RE.test(e) ? e : null;
 }
 
+/** OWNER_EMAILS if set; otherwise everyone in ALLOWED_EMAILS (a one-click deploy only asks for that one). */
 export function owners(env: PeopleEnv): AllowList {
-  return parseAllowedEmails(env.OWNER_EMAILS);
+  const explicit = parseAllowedEmails(env.OWNER_EMAILS);
+  return explicit.emails.size > 0 || explicit.domains.size > 0 ? explicit : parseAllowedEmails(env.ALLOWED_EMAILS);
+}
+
+/** Whether invites can be saved without pasting a token (a CF_ACCESS_API_TOKEN secret is set). */
+export function hasStoredToken(env: PeopleEnv): boolean {
+  return typeof env.CF_ACCESS_API_TOKEN === 'string' && env.CF_ACCESS_API_TOKEN.trim() !== '';
 }
 
 export function isOwner(env: PeopleEnv, email: string): boolean {
@@ -59,12 +66,15 @@ export class PeopleError extends Error {
   }
 }
 
-/** Replace the Access policy's include list with exactly these emails. */
-export async function syncAccessPolicy(env: PeopleEnv, emails: readonly string[], fetchImpl: typeof fetch = fetch): Promise<void> {
-  const { CF_ACCESS_API_TOKEN: token, CF_ACCOUNT_ID: account, ACCESS_APP_ID: app, ACCESS_POLICY_ID: policy } = env;
-  if (!token || !account || !app || !policy) {
-    throw new PeopleError(503, "Adding people isn't set up yet: the Cloudflare token for sign-in changes is missing.");
-  }
+/**
+ * Replace the Access policy's include list with exactly these emails. `oneTimeToken` is a token pasted
+ * for this one change (used, never stored); otherwise the CF_ACCESS_API_TOKEN secret is used.
+ */
+export async function syncAccessPolicy(env: PeopleEnv, emails: readonly string[], fetchImpl: typeof fetch = fetch, oneTimeToken?: string): Promise<void> {
+  const { CF_ACCOUNT_ID: account, ACCESS_APP_ID: app, ACCESS_POLICY_ID: policy } = env;
+  const token = oneTimeToken?.trim() || env.CF_ACCESS_API_TOKEN?.trim();
+  if (!account || !app || !policy) throw new PeopleError(503, "Adding people isn't set up yet: finish first-run setup first.");
+  if (!token) throw new PeopleError(400, 'Paste a Cloudflare API token to save this change. It’s used once and never stored.');
   if (emails.length === 0) throw new PeopleError(400, 'The sign-in list can’t be empty.');
   const url = `https://api.cloudflare.com/client/v4/accounts/${account}/access/apps/${app}/policies/${policy}`;
   const res = await fetchImpl(url, {
@@ -75,11 +85,11 @@ export async function syncAccessPolicy(env: PeopleEnv, emails: readonly string[]
   if (!res.ok) throw new PeopleError(502, "Cloudflare didn't accept the sign-in change. Nothing was changed. Try again.");
 }
 
-export async function addPerson(db: D1Database, env: PeopleEnv, email: string, addedBy: string, now = Date.now(), fetchImpl?: typeof fetch): Promise<Person[]> {
+export async function addPerson(db: D1Database, env: PeopleEnv, email: string, addedBy: string, now = Date.now(), fetchImpl?: typeof fetch, oneTimeToken?: string): Promise<Person[]> {
   if ((await listPeople(db, env)).some((p) => p.email === email)) throw new PeopleError(409, `${email} can already sign in.`);
   await db.prepare('INSERT INTO allowed_emails (email, role, added_by_user_id, created_at) VALUES (?, ?, ?, ?)').bind(email, 'member', addedBy, now).run();
   try {
-    await syncAccessPolicy(env, await allEmails(db, env), fetchImpl);
+    await syncAccessPolicy(env, await allEmails(db, env), fetchImpl, oneTimeToken);
   } catch (err) {
     await db.prepare('DELETE FROM allowed_emails WHERE email = ?').bind(email).run(); // roll back
     throw err;
@@ -87,14 +97,14 @@ export async function addPerson(db: D1Database, env: PeopleEnv, email: string, a
   return listPeople(db, env);
 }
 
-export async function removePerson(db: D1Database, env: PeopleEnv, email: string, fetchImpl?: typeof fetch): Promise<Person[]> {
+export async function removePerson(db: D1Database, env: PeopleEnv, email: string, fetchImpl?: typeof fetch, oneTimeToken?: string): Promise<Person[]> {
   const people = await listPeople(db, env);
   const p = people.find((x) => x.email === email);
   if (!p) throw new PeopleError(404, `${email} isn't on the list.`);
   if (p.builtIn) throw new PeopleError(400, `${email} is built in and can’t be removed here.`);
   await db.prepare('DELETE FROM allowed_emails WHERE email = ?').bind(email).run();
   try {
-    await syncAccessPolicy(env, await allEmails(db, env), fetchImpl);
+    await syncAccessPolicy(env, await allEmails(db, env), fetchImpl, oneTimeToken);
   } catch (err) {
     await db.prepare('INSERT OR IGNORE INTO allowed_emails (email, role, created_at) VALUES (?, ?, ?)').bind(email, 'member', Date.now()).run();
     throw err;

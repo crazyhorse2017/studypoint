@@ -4,14 +4,14 @@
 
 import { APP_VERSION, createApp, type Env } from './app.ts';
 import { createAccessVerifier } from './auth/accessJwt.ts';
-import { parseAllowedEmails } from './auth/policy.ts';
 import { runNightlyBackup } from './backup/d1.ts';
+import { owners } from './people.ts';
 import { ensureUser } from './users.ts';
 
 const app = createApp({
   makeVerifier: (config) => createAccessVerifier(config.issuer ?? '', config.aud ?? ''),
   resolveUserId: async (env, identity) =>
-    env.DB ? (await ensureUser(env.DB, identity, parseAllowedEmails(env.OWNER_EMAILS))).id : null,
+    env.DB ? (await ensureUser(env.DB, identity, owners(env))).id : null,
 });
 
 export default {

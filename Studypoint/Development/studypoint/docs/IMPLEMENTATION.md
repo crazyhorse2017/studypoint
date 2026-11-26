@@ -36,19 +36,22 @@ This doc covers **how** and **in what order** Studyflare gets built: environment
   A failing check blocks the deploy. The build image has Python 3.14. Browser-based JS tests can't run there (no Chrome), so they stay local until GitHub Actions is active.
 - **GitHub Actions** only reads `.github/workflows/` at the repo root, so the nested workflows don't run yet. Moving the project to the repo root (or adding a root workflow with `working-directory`) turns them on.
 - Live at `https://studyflare.r279.workers.dev`. This was renamed from Studypoint on 2026-11-26, and the old `studypoint.r279.workers.dev` redirects. Preview URLs are off until the protected preview environment exists.
+- **Public one-click copy (`AUTH-07`, A18):** run `uv run --no-project --python 3.12 python tools/export_public.py`. It writes `../studyflare-public/` and refuses to finish if any real email or any id from this `wrangler.jsonc` would leak. Push that folder as the root of the **public** repo `crazyhorse2017/studyflare`. Re-export and push after each release.
 - **Secrets on the `studyflare` Worker:**
   - `ALLOWED_EMAILS`: built-in sign-in emails (the owner's).
   - `OWNER_EMAILS`: emails that open the owner's account.
   - `CF_ACCESS_API_TOKEN`: a Cloudflare API token limited to "Access: Apps and Policies → Edit", used by Settings → People.
 - **Sign-in (T0.07):**
   - Cloudflare Access app "Studyflare" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
-  - 30-day sessions, and the "Studyflare owner" policy listing Alex's two emails.
+  - 30-day sessions, and the "Studyflare people" policy: Alex's two emails plus everyone invited in Settings → People.
+  - The old `studypoint` Worker is now only a 301 redirect to studyflare (no bindings, no cron). It stays behind the same Access app, so the redirect happens after sign-in.
+  - First invite (2026-11-26): one friend's email, added to `allowed_emails` and the policy directly, since `CF_ACCESS_API_TOKEN` wasn't set yet.
   - Login methods (2026-11-26): **Passkeys** (Access built-in identity provider `89b2b103…`) and **email PIN**. With two methods there's a chooser page instead of an auto-redirect.
   - Passkeys are registered from the sign-in page after verifying by PIN, and managed under "Manage passkeys".
   - **Verified 2026-11-26 by Alex:** a passkey sign-in token carries the email claim. The app's `ALLOWED_EMAILS` check passes, and Settings shows "Signed in as …".
   - Because the Zero Trust org is shared, NoteFlare (which accepts all login methods) also shows the passkey option.
-  - The app re-checks the same list from the `ALLOWED_EMAILS` Worker secret.
-  - To add or remove an email, change both the Access policy and the secret.
+  - The app re-checks owners from the `ALLOWED_EMAILS` / `OWNER_EMAILS` secrets, and invited people from the `allowed_emails` table.
+  - To add or remove an invited person, use Settings → People (it updates the table and the Access policy together). Owner emails still need both the policy and the secrets changed.
 - **Storage (T0.05 part 1):** D1 `studypoint-db` / `studypoint-preview` and Vectorize `passages-v1` / `passages-preview`, with IDs in `wrangler.jsonc`.
   - `0001_init.sql` was applied through the D1 API and recorded in `d1_migrations` (the same table wrangler uses), so `wrangler d1 migrations apply` will continue from 0002.
   - **Deploy command (since 2026-11-26):** `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`. New migrations apply before the new Worker goes live. The first run reported "No migrations to apply", which confirms 0001 is recorded.

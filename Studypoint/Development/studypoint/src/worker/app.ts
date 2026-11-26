@@ -10,7 +10,16 @@ import { getAppearance, patchAppearance } from './settings.ts';
 import { DuplicateCourse, createCourse, deleteCourse, getHomeSchool, listCourses, setHomeSchool, updateCourse } from './courses.ts';
 import { validateCourse, validateSchool } from '../shared/courses.ts';
 import { matchPath, type RouteParams } from '../shared/routeMatch.ts';
-import { PeopleError, addPerson, isInvited, isOwner, listPeople, normaliseEmail, removePerson, type PeopleEnv } from './people.ts';
+import { PeopleError, addPerson, hasStoredToken, isInvited, isOwner, listPeople, normaliseEmail, removePerson, type PeopleEnv } from './people.ts';
+import { parseAllowedEmails } from './auth/policy.ts';
+import { effectiveEnv, isPlaceholder, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
+import { SetupError, runSetup } from './setup/cloudflare.ts';
+
+/** An optional one-time Cloudflare token sent with a People change (never stored). */
+function tokenFrom(body: unknown): string | undefined {
+  const t = (body as Record<string, unknown> | null)?.['token'];
+  return typeof t === 'string' && t.trim() !== '' ? t.trim() : undefined;
+}
 
 /** Small JSON bodies only (settings and similar). Imports have their own path. */
 const MAX_JSON_BYTES = 64 * 1024;
@@ -69,7 +78,7 @@ export const ROUTES: readonly Route[] = [
     handler: async ({ env, identity }) => {
       if (!env.DB) return needsDb();
       if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
-      return json({ people: await listPeople(env.DB, env) });
+      return json({ people: await listPeople(env.DB, env), tokenStored: hasStoredToken(env) });
     },
   },
   {
@@ -87,7 +96,7 @@ export const ROUTES: readonly Route[] = [
       const email = normaliseEmail((body as Record<string, unknown> | null)?.['email']);
       if (!email) return apiError(400, 'invalid_email', 'Enter a full email address, like name@example.com.');
       try {
-        return json({ people: await addPerson(env.DB, env, email, userId) }, 201);
+        return json({ people: await addPerson(env.DB, env, email, userId, Date.now(), undefined, tokenFrom(body)) }, 201);
       } catch (err) {
         if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
         throw err;
@@ -97,13 +106,20 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'DELETE',
     path: '/api/people/:email',
-    handler: async ({ env, identity, params }) => {
+    handler: async ({ request, env, identity, params }) => {
       if (!env.DB) return needsDb();
       if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
       const email = normaliseEmail(params['email']);
       if (!email) return apiError(400, 'invalid_email', "That isn't a valid email.");
+      let body: unknown = null;
       try {
-        return json({ people: await removePerson(env.DB, env, email) });
+        const text = await request.text();
+        body = text.trim() === '' || text.length > MAX_JSON_BYTES ? null : JSON.parse(text);
+      } catch {
+        body = null;
+      }
+      try {
+        return json({ people: await removePerson(env.DB, env, email, undefined, tokenFrom(body)) });
       } catch (err) {
         if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
         throw err;
@@ -258,16 +274,66 @@ export type AppDeps = {
   makeVerifier: (config: AuthConfig) => TokenVerifier;
   /** Called once a request is authenticated; returns the user's row id (creating it on first sign-in). */
   resolveUserId?: (env: Env, identity: Identity) => Promise<string | null>;
+  /** Cloudflare API fetch for first-run setup (tests inject a fake). */
+  fetchImpl?: typeof fetch;
 };
 
 const NO_VERIFIER: TokenVerifier = async () => {
   throw new Error('No verifier configured');
 };
 
+/** Wrangler values, with first-run setup values filled in where wrangler says "todo" (AUTH-07). */
+async function resolveEnv(env: Env): Promise<Env> {
+  if (!env.DB || (!needsSetup(env) && !isPlaceholder(env.ACCESS_APP_ID))) return env;
+  let stored: StoredConfig = {};
+  try {
+    stored = await readStoredConfig(env.DB);
+  } catch {
+    stored = {}; // table not migrated yet: behaves as "not set up"
+  }
+  return effectiveEnv(env, stored);
+}
+
+/**
+ * First-run setup routes (AUTH-07). They are the only API that answers without sign-in, and only while
+ * sign-in isn't configured; afterwards they report "done" and refuse to run again.
+ */
+async function handleSetup(request: Request, env: Env, url: URL, fetchImpl?: typeof fetch): Promise<Response> {
+  const pending = needsSetup(env);
+  const allowed = parseAllowedEmails(env.ALLOWED_EMAILS);
+  if (request.method === 'GET') {
+    return json({ needed: pending, emailsSet: allowed.emails.size > 0, host: url.hostname });
+  }
+  if (request.method !== 'POST') return apiError(405, 'method_not_allowed', 'Use GET or POST for this endpoint.');
+  if (!pending) return apiError(409, 'already_set_up', 'Studyflare is already set up.');
+  if (!env.DB) return needsDb();
+  let body: unknown;
+  try {
+    body = await readJson(request);
+  } catch {
+    return apiError(400, 'invalid_json', "That request couldn't be read.");
+  }
+  const token = tokenFrom(body);
+  if (!token) return apiError(400, 'missing_token', 'Paste your Cloudflare API token.');
+  try {
+    const outcome = await runSetup({ token, host: url.hostname, emails: [...allowed.emails].sort(), fetchImpl });
+    await writeStoredConfig(env.DB, outcome.stored);
+    return json({ done: true, branded: outcome.branded, orgCreated: outcome.orgCreated });
+  } catch (err) {
+    if (err instanceof SetupError) return apiError(err.status, 'setup_failed', err.message);
+    return apiError(500, 'internal_error', 'Setup hit an unexpected problem. Try again.');
+  }
+}
+
 export function createApp(deps: AppDeps) {
-  async function handleApi(request: Request, env: Env): Promise<Response> {
+  async function handleApi(request: Request, rawEnv: Env): Promise<Response> {
     const url = new URL(request.url);
+    const env = await resolveEnv(rawEnv);
+    if (url.pathname === '/api/setup') return handleSetup(request, env, url, deps.fetchImpl);
     const config = readAuthConfig(env);
+    if (needsSetup(env) && config.environment !== 'development') {
+      return apiError(503, 'setup_required', 'Studyflare needs its one-time setup before anyone can sign in.');
+    }
     const verifier = config.issuer && config.aud ? deps.makeVerifier(config) : NO_VERIFIER;
 
     const db = env.DB;

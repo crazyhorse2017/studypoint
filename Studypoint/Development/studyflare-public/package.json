@@ -1,0 +1,43 @@
+{
+  "name": "studyflare",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Studyflare: an AI-assisted study platform on Cloudflare Workers.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "vite build && wrangler deploy && wrangler d1 migrations apply DB --remote"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": { "description": "D1 database for your courses, notes and cards. Created automatically." },
+      "ALLOWED_EMAILS": { "description": "**Your email address.** Only these emails (comma-separated) can sign in, and they own this Studyflare." },
+      "ACCESS_TEAM_DOMAIN": { "description": "Keep `todo`. On first open, Studyflare sets up its Cloudflare Access sign-in and fills this in." },
+      "ACCESS_AUD": { "description": "Keep `todo`. Filled in by Studyflare's first-run setup." },
+      "ENVIRONMENT": { "description": "Keep `production`." }
+    }
+  },
+  "dependencies": {
+    "jose": "6.2.18",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.70.2",
+    "@cloudflare/workers-types": "5.20261125.1",
+    "@tailwindcss/vite": "4.3.5",
+    "@types/react": "19.3.3",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "6.0.3",
+    "vite": "8.3.8",
+    "wrangler": "4.168.0"
+  }
+}

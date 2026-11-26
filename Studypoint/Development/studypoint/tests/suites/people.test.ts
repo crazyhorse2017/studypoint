@@ -92,11 +92,11 @@ export function register(test: TestFn, assert: Assert): void {
     assert.ok(!rows.has('friend@example.com'), 'rolled back');
   });
 
-  test('people: missing Cloudflare token gives a clear "not set up" error and changes nothing', async () => {
+  test('people: missing Access app ids give a clear "not set up" error and change nothing', async () => {
     const { db, rows } = fakeDb();
     let msg = '';
     try {
-      await addPerson(db, { ...ENV, CF_ACCESS_API_TOKEN: undefined }, 'friend@example.com', 'u1', 10, recordingFetch().f);
+      await addPerson(db, { ...ENV, ACCESS_APP_ID: undefined }, 'friend@example.com', 'u1', 10, recordingFetch().f);
     } catch (e) {
       msg = (e as Error).message;
     }
@@ -130,7 +130,27 @@ export function register(test: TestFn, assert: Assert): void {
   test('people: only owner emails are owners', () => {
     assert.ok(isOwner(ENV, 'OWNER@example.edu'));
     assert.ok(!isOwner(ENV, 'friend@example.com'));
-    assert.ok(!isOwner({}, 'owner@example.edu'), 'no OWNER_EMAILS means no owners');
+    assert.ok(!isOwner({}, 'owner@example.edu'), 'no lists at all means no owners');
+  });
+
+  test('people (AUTH-07): without OWNER_EMAILS, the one-click ALLOWED_EMAILS are the owners', () => {
+    const env: PeopleEnv = { ALLOWED_EMAILS: 'me@example.com' };
+    assert.ok(isOwner(env, 'me@example.com'));
+    assert.ok(!isOwner(env, 'friend@example.com'));
+    assert.ok(!isOwner({ ...env, OWNER_EMAILS: 'other@example.com' }, 'me@example.com'), 'OWNER_EMAILS wins when set');
+  });
+
+  test('people (AUTH-07): a pasted one-time token is used for that change when no secret is stored', async () => {
+    const { db, rows } = fakeDb();
+    const noSecret = { ...ENV, CF_ACCESS_API_TOKEN: undefined };
+    let msg = '';
+    try { await addPerson(db, noSecret, 'friend@example.com', 'u1', 10, recordingFetch().f); } catch (e) { msg = (e as Error).message; }
+    assert.ok(msg.includes('Paste a Cloudflare API token'), msg);
+    assert.equal(rows.size, 0, 'nothing saved without a token');
+    const { f, calls } = recordingFetch(true);
+    await addPerson(db, noSecret, 'friend@example.com', 'u1', 10, f, 'pasted-token-123');
+    assert.equal(calls[0]?.auth, 'Bearer pasted-token-123');
+    assert.ok(rows.has('friend@example.com'));
   });
 
   test('auth: an invited email (verified by Access) is let in; a stranger is still refused', async () => {

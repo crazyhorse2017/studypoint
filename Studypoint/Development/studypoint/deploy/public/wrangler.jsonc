@@ -1,0 +1,29 @@
+{
+  // Studyflare for the "Deploy to Cloudflare" button (AUTH-07). tools/export_public.py copies this file into
+  // the public repo as wrangler.jsonc. Nothing here belongs to one person: no ids, no emails.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "studyflare",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-11-20",
+  "workers_dev": true,
+  // Per-version preview URLs would skip the Access login. Keep them off.
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true },
+  // Nightly backup (skips quietly until an R2 bucket is added).
+  "triggers": { "crons": ["0 8 * * *"] },
+  "vars": {
+    "ENVIRONMENT": "production",
+    // Your email (or several, comma-separated). Only these can sign in; they also own the app.
+    "ALLOWED_EMAILS": "",
+    // Keep "todo": on first open, Studyflare sets up its Cloudflare Access login for you and stores these.
+    "ACCESS_TEAM_DOMAIN": "todo",
+    "ACCESS_AUD": "todo"
+  },
+  // No database_id: the first deploy creates the database, and the deploy script applies migrations.
+  "d1_databases": [{ "binding": "DB", "database_name": "studyflare", "migrations_dir": "migrations" }]
+}

@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+/* Expose the design tokens to Tailwind utilities (bg-surface, text-text-2, rounded-md, …).
+   `inline` keeps them as live var() references, so switching style/theme needs no rebuild. */
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-chip-text: var(--chip-text);
+  --color-general-bg: var(--general-bg);
+  --color-general-text: var(--general-text);
+  --color-general-rule: var(--general-rule);
+  --color-unverified-bg: var(--unverified-bg);
+  --color-unverified-text: var(--unverified-text);
+  --color-again-bg: var(--again-bg);
+  --color-again-text: var(--again-text);
+  --color-hard-bg: var(--hard-bg);
+  --color-hard-text: var(--hard-text);
+  --color-good-bg: var(--good-bg);
+  --color-good-text: var(--good-text);
+  --color-easy-bg: var(--easy-bg);
+  --color-easy-text: var(--easy-text);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-reading: var(--ff-reading);
+  --font-ui: var(--ff-ui);
+  --font-mono: var(--ff-mono);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --shadow-pop: var(--sh-pop);
+}
+
+@layer base {
+  html {
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--ff-ui);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  /* DESIGN §2.7: 2px accent outline, never hidden, survives forced-colours mode. */
+  :focus-visible {
+    outline: var(--focus-width) solid var(--accent);
+    outline-offset: var(--focus-offset);
+  }
+
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
+  /* WCAG 2.5.8: targets are at least 24px everywhere (component sizes), 44px on touch screens (DESIGN §3). */
+  @media (pointer: coarse) {
+    .ds-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  .ds-dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .ds-dialog[open] {
+    margin: auto;
+  }
+
+  .ds-spinner {
+    width: 1em;
+    height: 1em;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: ds-spin 0.7s linear infinite;
+  }
+
+  @keyframes ds-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ds-spinner {
+      animation-duration: 2s;
+    }
+  }
+
+  /* Reading text (DESIGN §2.6, UX-03). The user's font choice overrides the style's reading font. */
+  .reading {
+    font-family: var(--ff-reading-override, var(--ff-reading));
+    font-size: var(--fs-reading);
+    line-height: var(--lh-reading);
+    letter-spacing: var(--ls-reading, 0);
+    max-width: var(--reading-width);
+  }
+
+  /* Skip link: hidden until focused (WCAG 2.4.1). */
+  .skip-link {
+    position: absolute;
+    left: var(--s-4);
+    top: -100px;
+    z-index: 60;
+  }
+  .skip-link:focus {
+    top: var(--s-4);
+  }
+}

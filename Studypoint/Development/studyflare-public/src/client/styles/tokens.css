@@ -1,0 +1,233 @@
+/* Studyflare design tokens (DESIGN §2): 3 styles × 2 themes.
+   Source of truth for colours. tools/check_contrast.py reads this file and fails CI if any pair drops below its WCAG floor.
+   Applied via <html data-style="paper|lab|midnight" data-theme="light|dark">. Components use var(--…) only (AGENTS 18). */
+
+:root {
+  --ff-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-6: 24px; --s-8: 32px; --s-12: 48px;
+  --fs-xs: 0.75rem; --fs-sm: 0.875rem; --fs-md: 1rem; --fs-lg: 1.25rem; --fs-xl: 1.625rem; --fs-2xl: 2.125rem;
+  --fs-reading: 1.125rem; --lh-reading: 1.7; --reading-width: 68ch;
+  --dur-fast: 120ms; --dur-base: 200ms; --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --focus-width: 2px; --focus-offset: 2px;
+}
+
+:root, [data-style='paper'][data-theme='light'] {
+  color-scheme: light;
+  --page: #fbf8f2;
+  --surface: #ffffff;
+  --sunken: #f4efe6;
+  --border: #e4dccd;
+  --border-strong: #9c8e76;
+  --text: #2b2620;
+  --text-2: #5e5548;
+  --text-3: #6f6557;
+  --accent: #1f3b66;
+  --on-accent: #ffffff;
+  --accent-bg: #e8eef7;
+  --chip-text: #1f3b66;
+  --general-bg: #f6f0e4;
+  --general-text: #5e5548;
+  --general-rule: #8c7853;
+  --unverified-bg: #fbefd9;
+  --unverified-text: #6b4a10;
+  --again-bg: #f6e3de;
+  --again-text: #7a2e1e;
+  --hard-bg: #f3ecdd;
+  --hard-text: #6b5320;
+  --good-bg: #e3eee3;
+  --good-text: #2f5a30;
+  --easy-bg: #e8eef7;
+  --easy-text: #1f3b66;
+  --danger: #a3321f;
+  --success: #2f6b33;
+  --warning: #8a5a00;
+  --ff-reading: 'Literata Variable', Literata, Georgia, serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --sh-pop: 0 8px 24px rgb(43 38 32 / 0.12);
+}
+
+[data-style='paper'][data-theme='dark'] {
+  color-scheme: dark;
+  --page: #1e1b17;
+  --surface: #26221d;
+  --sunken: #191714;
+  --border: #3a342c;
+  --border-strong: #7a6f5e;
+  --text: #ede6da;
+  --text-2: #bdb3a3;
+  --text-3: #a09685;
+  --accent: #9db4d8;
+  --on-accent: #1e1b17;
+  --accent-bg: #22304a;
+  --chip-text: #b7cae8;
+  --general-bg: #2c2720;
+  --general-text: #bdb3a3;
+  --general-rule: #8c7c60;
+  --unverified-bg: #33281a;
+  --unverified-text: #e9c27a;
+  --again-bg: #3a221c;
+  --again-text: #f2b4a6;
+  --hard-bg: #352c1a;
+  --hard-text: #e8cf95;
+  --good-bg: #1f3220;
+  --good-text: #a9d6a8;
+  --easy-bg: #22304a;
+  --easy-text: #b7cae8;
+  --danger: #f09a86;
+  --success: #8fcb8e;
+  --warning: #e9c27a;
+  --ff-reading: 'Literata Variable', Literata, Georgia, serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --sh-pop: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+[data-style='lab'][data-theme='light'] {
+  color-scheme: light;
+  --page: #f4f6f8;
+  --surface: #ffffff;
+  --sunken: #ebeff3;
+  --border: #d5dce3;
+  --border-strong: #8593a3;
+  --text: #1b2430;
+  --text-2: #4a5664;
+  --text-3: #5a6675;
+  --accent: #0e705c;
+  --on-accent: #ffffff;
+  --accent-bg: #ddf2ec;
+  --chip-text: #0b5446;
+  --general-bg: #eef2f5;
+  --general-text: #4a5664;
+  --general-rule: #7a8796;
+  --unverified-bg: #fbf0d9;
+  --unverified-text: #6e4a08;
+  --again-bg: #fbe3e3;
+  --again-text: #7d1f1f;
+  --hard-bg: #fbf0d9;
+  --hard-text: #6e4a08;
+  --good-bg: #ddf2ec;
+  --good-text: #0b5446;
+  --easy-bg: #e2ecf8;
+  --easy-text: #173f6b;
+  --danger: #b42318;
+  --success: #1e6b3e;
+  --warning: #8a5a00;
+  --ff-reading: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 10px;
+  --sh-pop: 0 8px 24px rgb(43 38 32 / 0.12);
+}
+
+[data-style='lab'][data-theme='dark'] {
+  color-scheme: dark;
+  --page: #14181d;
+  --surface: #1b2027;
+  --sunken: #101317;
+  --border: #2a313a;
+  --border-strong: #6b7785;
+  --text: #e3e8ee;
+  --text-2: #aab4c0;
+  --text-3: #8e99a6;
+  --accent: #4fd1b0;
+  --on-accent: #0b1f1a;
+  --accent-bg: #12352d;
+  --chip-text: #8fe5cf;
+  --general-bg: #1f252d;
+  --general-text: #aab4c0;
+  --general-rule: #6b7785;
+  --unverified-bg: #33291a;
+  --unverified-text: #f0c674;
+  --again-bg: #3a1e1e;
+  --again-text: #f5a3a3;
+  --hard-bg: #33291a;
+  --hard-text: #f0c674;
+  --good-bg: #12352d;
+  --good-text: #8fe5cf;
+  --easy-bg: #1a2b44;
+  --easy-text: #a9c8f0;
+  --danger: #f28b82;
+  --success: #7fd8a4;
+  --warning: #f0c674;
+  --ff-reading: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 10px;
+  --sh-pop: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+[data-style='midnight'][data-theme='light'] {
+  color-scheme: light;
+  --page: #f5f5fa;
+  --surface: #ffffff;
+  --sunken: #ececf4;
+  --border: #dcdce8;
+  --border-strong: #8a8aa6;
+  --text: #1a1c2b;
+  --text-2: #4a4d63;
+  --text-3: #5c5f78;
+  --accent: #5b47d6;
+  --on-accent: #ffffff;
+  --accent-bg: #ece9fd;
+  --chip-text: #3f2fa8;
+  --general-bg: #f0f0f7;
+  --general-text: #4a4d63;
+  --general-rule: #76769a;
+  --unverified-bg: #fbefd9;
+  --unverified-text: #6b4a10;
+  --again-bg: #fce4ea;
+  --again-text: #8a1f35;
+  --hard-bg: #f6eedc;
+  --hard-text: #6b5320;
+  --good-bg: #e0f2e8;
+  --good-text: #1f5a3a;
+  --easy-bg: #ece9fd;
+  --easy-text: #3f2fa8;
+  --danger: #b4233c;
+  --success: #1f6b42;
+  --warning: #8a5a00;
+  --ff-reading: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --sh-pop: 0 8px 24px rgb(43 38 32 / 0.12);
+}
+
+[data-style='midnight'][data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0e1220;
+  --surface: #161b2e;
+  --sunken: #0b0f1a;
+  --border: #2a3150;
+  --border-strong: #5d6690;
+  --text: #e6e8f0;
+  --text-2: #aeb4c8;
+  --text-3: #9aa1b8;
+  --accent: #b3a6ff;
+  --on-accent: #0e1220;
+  --accent-bg: #2b2550;
+  --chip-text: #c9beff;
+  --general-bg: #1c2238;
+  --general-text: #aeb4c8;
+  --general-rule: #7c86b0;
+  --unverified-bg: #3a311c;
+  --unverified-text: #f5d08a;
+  --again-bg: #3a1e28;
+  --again-text: #ffb3c1;
+  --hard-bg: #3a311c;
+  --hard-text: #f5d08a;
+  --good-bg: #173326;
+  --good-text: #9be3b8;
+  --easy-bg: #2b2550;
+  --easy-text: #c9beff;
+  --danger: #ff8fa3;
+  --success: #7fdca8;
+  --warning: #f5d08a;
+  --ff-reading: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --ff-ui: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --sh-pop: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; }
+}
+[data-reduce-motion='true'] { --dur-fast: 0ms; --dur-base: 0ms; }

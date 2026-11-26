@@ -66,6 +66,8 @@ Planning history is in `docs/PLANNING_LOG.md`, `docs/RESEARCH.md` and `docs/SOUR
 ### Security
 13. Every `/api/*` route goes through the Access JWT middleware (`jose` against the team certs, plus `iss` and `aud`) and the `ALLOWED_EMAILS` check.
     - The dev bypass is localhost-only.
+    - The one exception is `/api/setup` (`AUTH-07`). It answers only while sign-in isn't configured, takes emails only from the Worker's own `ALLOWED_EMAILS`, and never stores the token.
+    - The public one-click copy is made only with `tools/export_public.py`, which blocks emails and private ids. Never push docs, tests or this deployment's `wrangler.jsonc` to the public repo.
     - The CI service-token mapping and `AI_FAKE` exist **only in the preview env**.
 14. **Secrets** (`GEMINI_API_KEY`, `TAVILY_API_KEY`, `ALLOWED_EMAILS`, …) are Worker secrets only. Never put them in the repo, logs, the client bundle, URLs or error messages.
 15. AI and web Markdown is rendered only through the sanitising `Markdown` component. Uploads are type-checked by magic bytes, and **SVG is rejected**.

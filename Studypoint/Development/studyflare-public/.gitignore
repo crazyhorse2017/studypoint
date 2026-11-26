@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+.DS_Store
+Thumbs.db
+# Alex's course materials and eval data never go in the repo (TESTING §4.3, §9)
+eval/

@@ -79,6 +79,18 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   - Each change also updates the Cloudflare Access policy through a token scoped to Access edits. If Cloudflare refuses, the change is rolled back, so the two lists can't drift apart.
   - Built-in owner emails can't be removed there.
   - Removing someone blocks them immediately at the app check, even if their Access session hasn't expired. Their data is kept.
+  - *(2026-11-26)* If no `CF_ACCESS_API_TOKEN` secret is set, each add or remove asks for a Cloudflare token pasted on the page. It's used for that one change and never stored.
+- **AUTH-07 MUST** — **One-click deploy, like NoteFlare** *(added 2026-11-26)*. Anyone can run their own private Studyflare from a "Deploy to Cloudflare" button on the public, app-only repo (`crazyhorse2017/studyflare`).
+  - The deploy page asks for just one thing: `ALLOWED_EMAILS`. Those emails own the app (`OWNER_EMAILS` is optional).
+  - On first open, a setup page asks for a one-time Cloudflare API token. It creates the Zero Trust org if needed, email-PIN login, the Access app and an allow policy for exactly `ALLOWED_EMAILS`, and stores the ids in `app_config`. The token is never stored.
+  - **Branded login:** if setup creates the login page, or the existing one isn't customised, it sets Studyflare's name, colours and logo (`/brand/logo.svg`, the only public path). A login page already customised (for example, shared with NoteFlare) is left alone.
+  - Before setup, every API route except `/api/setup` answers 503. After setup, `/api/setup` refuses to run again.
+  - Setup only works with a token for the account that owns this workers.dev address, and only for the emails in the Worker's own settings, so a stranger can't take over a fresh deploy.
+- **AUTH-08 MUST** — **Passphrase lock with end-to-end encryption** *(added 2026-11-26, design in ARCHITECTURE A18, P1)*. After Cloudflare sign-in, Studyflare is locked until the passphrase (or a passkey) unlocks it on that device, like NoteFlare.
+  - **Personal content** (own notes, own uploads and their text, chats, cards and questions made from personal sources) is stored encrypted. Cloudflare only ever holds ciphertext. Published content (textbooks, lookups) stays unencrypted.
+  - **AI while unlocked:** the browser decrypts and sends only the text a request needs. The Worker passes it to Workers AI (never Gemini, `PRV-02`) and stores nothing in plaintext. Nothing personal is processed while the user is away.
+  - Search over personal content runs in the browser. Vectors for personal passages are never stored on the server.
+  - A recovery code is shown once at setup. Losing both the passphrase and the code means the encrypted content can't be recovered, and the app says so plainly.
 - **AUTH-04 MUST** — Local dev bypass works only on localhost with an explicit dev variable. It is impossible in production.
 - **AUTH-05 MUST** — **Preview only:** a Cloudflare Access service token (`CI_SERVICE_TOKEN_ID`) maps to a dedicated CI test user for end-to-end tests, and `AI_FAKE=1` routes AI calls to recorded responses.
   A test asserts that both are unset in production (TESTING §5).
