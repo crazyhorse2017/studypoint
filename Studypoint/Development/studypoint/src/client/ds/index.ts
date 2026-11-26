@@ -13,6 +13,7 @@ export { Tabs } from './Tabs.tsx';
 export { Menu } from './Menu.tsx';
 export type { MenuItem } from './Menu.tsx';
 export { Tooltip } from './Tooltip.tsx';
+export { Combobox } from './Combobox.tsx';
 export { FileDrop } from './FileDrop.tsx';
 export { Dialog, ConfirmDialog } from './Dialog.tsx';
 export { ToastProvider, useToast } from './Toast.tsx';

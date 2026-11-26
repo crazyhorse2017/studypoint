@@ -3,8 +3,8 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 
-export { buildPath, isActive, matchPath, shouldInterceptClick } from './routeMatch.ts';
-export type { RouteParams } from './routeMatch.ts';
+export { buildPath, isActive, matchPath, shouldInterceptClick } from '../shared/routeMatch.ts';
+export type { RouteParams } from '../shared/routeMatch.ts';
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());

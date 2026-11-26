@@ -7,6 +7,8 @@ import { READING_LIMITS, type ReadingFont, type ThemePref } from '../../shared/s
 import { resolveTheme, readOsScheme } from '../theme.ts';
 import { updateSettings, useSettings, type SaveState } from '../settingsStore.ts';
 import { StylePicker } from './StylePicker.tsx';
+import { SchoolPicker } from './SchoolPicker.tsx';
+import { useStudy } from '../studyStore.ts';
 
 const FONT_OPTIONS: ReadonlyArray<{ value: ReadingFont; label: string }> = [
   { value: 'style', label: "Style default" },
@@ -26,6 +28,8 @@ const SAVE_TEXT: Record<SaveState, string> = {
 
 export function SettingsPage() {
   const { settings, save } = useSettings();
+  const { school } = useStudy();
+  const [changingSchool, setChangingSchool] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const r = settings.reading;
   const previewTheme = resolveTheme(settings.style, settings.theme, readOsScheme());
@@ -128,6 +132,23 @@ export function SettingsPage() {
           checked={r.shortcuts}
           onChange={(shortcuts) => setReading({ shortcuts })}
         />
+      </section>
+
+      <section aria-labelledby="school-heading" className="flex flex-col gap-3">
+        <h2 id="school-heading" className="text-xl font-semibold">
+          School
+        </h2>
+        {school && !changingSchool ? (
+          <p className="flex flex-wrap items-center gap-x-3 text-text-2">
+            <span className="text-text">{school.name}</span>
+            <button type="button" className="text-sm text-accent underline underline-offset-2" onClick={() => setChangingSchool(true)}>
+              Change
+            </button>
+          </p>
+        ) : (
+          <SchoolPicker onDone={() => setChangingSchool(false)} />
+        )}
+        <p className="text-sm text-text-2">New courses use this school. Courses you already added keep theirs.</p>
       </section>
 
       <section aria-labelledby="account-heading" className="flex flex-col gap-2">

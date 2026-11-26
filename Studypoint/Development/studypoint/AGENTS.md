@@ -38,10 +38,11 @@ Planning history is in `docs/PLANNING_LOG.md`, `docs/RESEARCH.md` and `docs/SOUR
   ```
   - `typecheck.py` must report **0 errors**.
   - VS Code shows "Cannot find module" errors because there's no `node_modules`. Ignore them.
-- **How code reaches GitHub:** like Prizm, Alex **uploads files through github.com**. There is no local git.
-  - The agent writes files in the vault repo folder and gives Alex an exact list of changed files plus the target branch.
-  - Alex uploads them to a `t<id>-<slug>` branch and opens the PR on the website.
-  - Keep each task's changed-file list short and explicit.
+- **How code reaches GitHub:** there is no local git. Alex uses a **GitHub Codespace**: he drags the changed files from the vault folder into the Codespace's `Studypoint/Development/studypoint/`, then runs `git add -A && git commit -m "…" && git push`.
+  - Don't rely on GitHub's web uploader: it dropped a subfolder (`src/worker/auth/`) on 2026-11-26.
+  - The agent ends each task with the exact changed-file list.
+  - After a push, confirm with `git ls-tree -r --name-only origin/main Studypoint/Development/studypoint | wc -l`, which should equal the local file count.
+  - Every push to `main` starts a Workers Build. The checks gate the deploy.
 - Report results honestly. If something couldn't be verified locally, such as Worker integration or end-to-end tests, say so and point to the CI job that covers it.
 
 ## 3. Hard invariants (never break these)

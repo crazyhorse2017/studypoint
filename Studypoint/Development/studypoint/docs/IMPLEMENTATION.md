@@ -38,12 +38,17 @@ This doc covers **how** and **in what order** Studypoint gets built: environment
 - Live at `https://studypoint.r279.workers.dev`. Preview URLs are off until the protected preview environment exists.
 - **Sign-in (T0.07):**
   - Cloudflare Access app "Studypoint" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
-  - Email-PIN login only, 30-day sessions, and the "Studypoint owner" policy listing Alex's two emails.
+  - 30-day sessions, and the "Studypoint owner" policy listing Alex's two emails.
+  - Login methods (2026-11-26): **Passkeys** (Access built-in identity provider `89b2b103…`) and **email PIN**. With two methods there's a chooser page instead of an auto-redirect.
+  - Passkeys are registered from the sign-in page after verifying by PIN, and managed under "Manage passkeys".
+  - **Verified 2026-11-26 by Alex:** a passkey sign-in token carries the email claim. The app's `ALLOWED_EMAILS` check passes, and Settings shows "Signed in as …".
+  - Because the Zero Trust org is shared, NoteFlare (which accepts all login methods) also shows the passkey option.
   - The app re-checks the same list from the `ALLOWED_EMAILS` Worker secret.
   - To add or remove an email, change both the Access policy and the secret.
 - **Storage (T0.05 part 1):** D1 `studypoint-db` / `studypoint-preview` and Vectorize `passages-v1` / `passages-preview`, with IDs in `wrangler.jsonc`.
   - `0001_init.sql` was applied through the D1 API and recorded in `d1_migrations` (the same table wrangler uses), so `wrangler d1 migrations apply` will continue from 0002.
-  - Once the uploaded repo includes the D1 binding, the deploy command becomes `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`.
+  - **Deploy command (since 2026-11-26):** `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`. New migrations apply before the new Worker goes live. The first run reported "No migrations to apply", which confirms 0001 is recorded.
+- **Builds start on every push to `main`** (`push_event`). The first full deploy was commit `37bf4c5` "Complete P0 upload": 105 files, all checks green, bound to D1 + Vectorize, 78 KB gzipped JS, and no gallery chunk in production.
 
 There's no `wrangler dev` locally because there's no Node. The dev loop is: **edit → local Python checks → push branch → CI + preview deploy → check on the preview URL**.
 

@@ -68,7 +68,9 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 ## 6. Functional requirements
 
 ### 6.1 Access & identity (`AUTH`) — P0
-- **AUTH-01 MUST** — Cloudflare Access protects every route, and sign-in is a one-time email PIN.
+- **AUTH-01 MUST** — Cloudflare Access protects every route.
+  - Sign-in is a **passkey** (added 2026-11-26) or a one-time email PIN.
+  - A passkey can only be registered after verifying the email by PIN, and the same email allowlist applies to both methods.
 - **AUTH-02 MUST** — The Worker verifies the `Cf-Access-Jwt-Assertion` JWT on every API request: signature against the team certs, plus `iss` and `aud`. It never trusts the email header alone.
 - **AUTH-03 MUST** — After verification, the email must also be on the `ALLOWED_EMAILS` list (school and personal address). The list is a Worker variable or secret and is never committed.
 - **AUTH-03b MUST** — **One person, several logins.** Every allowed email signs in to the **same** account and library (the single-user owner). This is stored in `user_emails`. CI and dev identities stay separate.

@@ -7,6 +7,9 @@ import { ExportFormatError, gunzipJson, parseExportDocument } from './backup/for
 import { RestoreRefused, exportUser, restoreUser } from './backup/d1.ts';
 import { apiError, json } from './http.ts';
 import { getAppearance, patchAppearance } from './settings.ts';
+import { DuplicateCourse, createCourse, deleteCourse, getHomeSchool, listCourses, setHomeSchool, updateCourse } from './courses.ts';
+import { validateCourse, validateSchool } from '../shared/courses.ts';
+import { matchPath, type RouteParams } from '../shared/routeMatch.ts';
 
 /** Small JSON bodies only (settings and similar). Imports have their own path. */
 const MAX_JSON_BYTES = 64 * 1024;
@@ -34,6 +37,8 @@ export type RequestContext = {
   /** The signed-in user's row id, or null while D1 isn't bound yet. */
   userId: string | null;
   url: URL;
+  /** Values of :params in the route path, e.g. { id } for /api/courses/:id. */
+  params: RouteParams;
 };
 
 export type Route = {
@@ -77,6 +82,89 @@ export const ROUTES: readonly Route[] = [
         return apiError(400, 'invalid_json', "The settings update couldn't be read.");
       }
       return json(await patchAppearance(env.DB, userId, body));
+    },
+  },
+  {
+    // INS-01: the home school (null until chosen).
+    method: 'GET',
+    path: '/api/school',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ school: await getHomeSchool(env.DB, userId) });
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/school',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That school couldn't be read.");
+      }
+      const v = validateSchool(body);
+      if (!v.ok) return apiError(400, 'invalid_school', v.error);
+      return json({ school: await setHomeSchool(env.DB, userId, v.value) });
+    },
+  },
+  {
+    // LIB-01 / INS-02: courses.
+    method: 'GET',
+    path: '/api/courses',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ courses: await listCourses(env.DB, userId) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/courses',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That course couldn't be read.");
+      }
+      const v = validateCourse(body, await getHomeSchool(env.DB, userId));
+      if (!v.ok) return apiError(400, 'invalid_course', v.error);
+      try {
+        return json({ course: await createCourse(env.DB, userId, v.value) }, 201);
+      } catch (err) {
+        if (err instanceof DuplicateCourse) return apiError(409, 'duplicate_course', err.message);
+        throw err;
+      }
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/courses/:id',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: Record<string, unknown>;
+      try {
+        body = (await readJson(request)) as Record<string, unknown>;
+      } catch {
+        return apiError(400, 'invalid_json', "That change couldn't be read.");
+      }
+      const name = typeof body?.['name'] === 'string' ? body['name'].trim().replace(/\s+/g, ' ') : undefined;
+      if (name !== undefined && (name.length < 1 || name.length > 160)) return apiError(400, 'invalid_name', 'Course names need 1 to 160 characters.');
+      const archived = typeof body?.['archived'] === 'boolean' ? body['archived'] : undefined;
+      const course = await updateCourse(env.DB, userId, params['id'] ?? '', { name, archived });
+      return course ? json({ course }) : apiError(404, 'not_found', "That course doesn't exist.");
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/courses/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await deleteCourse(env.DB, userId, params['id'] ?? ''))
+        ? json({ deleted: true })
+        : apiError(404, 'not_found', "That course doesn't exist.");
     },
   },
   {
@@ -136,16 +224,16 @@ export function createApp(deps: AppDeps) {
     const auth = await authenticate(request, config, verifier);
     if (!auth.ok) return apiError(auth.status, auth.code, auth.message);
 
-    const matching = ROUTES.filter((r) => r.path === url.pathname);
+    const matching = ROUTES.map((r) => ({ r, params: matchPath(r.path, url.pathname) })).filter((m) => m.params !== null);
     if (matching.length === 0) return apiError(404, 'not_found', "That API route doesn't exist.");
-    const route = matching.find((r) => r.method === request.method);
-    if (!route) {
-      return apiError(405, 'method_not_allowed', `Use ${matching.map((r) => r.method).join(' or ')} for this endpoint.`);
+    const hit = matching.find((m) => m.r.method === request.method);
+    if (!hit) {
+      return apiError(405, 'method_not_allowed', `Use ${matching.map((m) => m.r.method).join(' or ')} for this endpoint.`);
     }
 
     const userId = deps.resolveUserId ? await deps.resolveUserId(env, auth.identity) : null;
     try {
-      return await route.handler({ request, env, identity: auth.identity, userId, url });
+      return await hit.r.handler({ request, env, identity: auth.identity, userId, url, params: hit.params ?? {} });
     } catch {
       // Never leak internals (stack traces, SQL) to the client; details go to Workers logs.
       return apiError(500, 'internal_error', 'Something went wrong. Try again.');

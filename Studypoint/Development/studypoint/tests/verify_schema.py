@@ -324,6 +324,26 @@ def _():
     assert q('"near" OR "text" OR "and"') == ["p2"], "quoted keywords are plain terms"
 
 
+@check("courses: the Worker's home-school upsert, insert, duplicate check and delete SQL all run (INS-01/02)")
+def _():
+    src = (ROOT / "src" / "worker" / "courses.ts").read_text(encoding="utf-8")
+    sqls = re.findall(r"`((?:INSERT|SELECT|UPDATE|DELETE)[^`]*)`", src, re.S)
+    upsert = next(s for s in sqls if s.startswith("INSERT INTO settings"))
+    insert = next(s for s in sqls if s.startswith("INSERT INTO courses"))
+    dup = next(s for s in sqls if "COALESCE(institution_unitid" in s)
+    db = fresh_db()
+    db.execute("INSERT INTO users (id, email, created_at) VALUES ('u1', 'ci@studypoint.invalid', 1)")
+    db.execute(upsert, ("u1", "163268", "Example University", "example.edu", 5))
+    db.execute(upsert, ("u1", None, "Other College", None, 6))
+    assert db.execute("SELECT home_unitid, home_institution_name FROM settings").fetchall() == [(None, "Other College")]
+    db.execute(insert, ("c1", "u1", "General Chemistry", "163268", "Example University", "example.edu", "CHEM", "101", "General Chemistry", 1, 1))
+    assert db.execute(dup, ("u1", "CHEM", "101", "163268", "Example University")).fetchone() is not None
+    assert db.execute(dup, ("u1", "CHEM", "101", None, "Another School")).fetchone() is None, "same code at another school is fine"
+    db.execute("INSERT INTO topics (id, course_id, name, position, created_at) VALUES ('t1', 'c1', 'Topic', 0, 1)")
+    db.execute("DELETE FROM courses WHERE id = ? AND user_id = ?", ("c1", "u1"))
+    assert db.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 0, "topics go with the course"
+
+
 @check("settings: the Worker's upsert SQL runs and updates in place (T0.20)")
 def _():
     src = (ROOT / "src" / "worker" / "settings.ts").read_text(encoding="utf-8")

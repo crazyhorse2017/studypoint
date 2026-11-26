@@ -6,6 +6,7 @@ import { matchPath, useFocusMainHeading, useLocation } from './router.ts';
 import { AppShell } from './shell/AppShell.tsx';
 import { ComingSoonPage, NotFoundPage, TodayPage } from './pages/TodayPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import { LibraryPage } from './pages/LibraryPage.tsx';
 
 // Gallery: dev/preview only. Vite replaces import.meta.env at build time, so in production this is
 // `false && …` and the gallery chunk is never built (checked in CI).
@@ -16,7 +17,7 @@ type RouteDef = { path: string; render: () => ReactNode };
 
 const ROUTES: readonly RouteDef[] = [
   { path: '/', render: () => <TodayPage /> },
-  { path: '/library', render: () => <ComingSoonPage title="Library" what="Your courses, files and notes will live here. Uploading arrives in the next phase." /> },
+  { path: '/library', render: () => <LibraryPage /> },
   { path: '/review', render: () => <ComingSoonPage title="Review" what="Flashcard reviews, scheduled with FSRS, arrive in the next phase." /> },
   { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
   { path: '/settings', render: () => <SettingsPage /> },

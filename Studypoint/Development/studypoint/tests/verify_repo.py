@@ -274,7 +274,18 @@ def rule_pinned_versions(files: Files) -> list[Violation]:
     return v
 
 
+MOJIBAKE = re.compile("Â[ -¿]|Ã[\u0080-¿‘-›]|â€")
+
+
+def rule_no_mojibake(files: Files) -> list[Violation]:
+    """UTF-8 read as Windows-1252 (e.g. by PowerShell 5.1 Get-Content) turns '§' into 'Â§' and '—' into 'â€”'."""
+    # This file itself is excluded: it must spell out the garbled sequences to detect them.
+    return _scan(files, "mojibake", lambda p: not p.endswith(".json") and p != "tests/verify_repo.py", MOJIBAKE,
+                 "Garbled characters (UTF-8 read as Windows-1252). Re-save the file as UTF-8.", strip=False)
+
+
 RULES: list[Rule] = [
+    rule_no_mojibake,
     rule_native_controls, rule_erasable_ts, rule_no_ai_sdks, rule_provider_calls_in_gateway, rule_no_hardcoded_models,
     rule_server_only, rule_no_secrets, rule_no_emails_in_code, rule_migrations, rule_ships_blank, rule_tokens_not_hex,
     rule_required_files, rule_pinned_versions,
@@ -329,6 +340,7 @@ PLANTED: list[tuple[str, Files]] = [
                           "migrations/.applied-hashes": "0001_init.sql " + "0" * 64}),
     ("ships-blank", {"tests/blank_denylist.txt": "MATH 152", "src/client/Onboarding.tsx": "placeholder='MATH152'"}),
     ("raw-hex-colour", {"src/client/A.tsx": "const s = { color: '#1F3B66' };"}),
+    ("mojibake", {"docs/notes.md": "See DESIGN Â§8 for details"}),
     ("required-file", {}),
     ("unpinned-dependency", {"package.json": json.dumps({"dependencies": {"react": "^19.0.0"}})}),
 ]

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Full TypeScript type check (`tsc --noEmit` equivalent) WITHOUT Node.js. Ported from Prizm's harness.
 
 How it works:
@@ -113,7 +113,7 @@ def _verify_integrity(data: bytes, integrity: str, name: str) -> None:
         raise RuntimeError(f"{name}: registry did not provide a usable integrity hash")
     digest = base64.b64encode(hashlib.new(algo, data).digest()).decode("ascii")
     if digest != expected:
-        raise RuntimeError(f"{name}: tarball integrity mismatch â€” refusing to extract")
+        raise RuntimeError(f"{name}: tarball integrity mismatch — refusing to extract")
 
 
 def _prune_to_type_files(package_dir: Path, keep_compiler: bool) -> None:

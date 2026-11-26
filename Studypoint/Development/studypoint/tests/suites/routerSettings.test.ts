@@ -1,6 +1,6 @@
 // Router matching (ARCHITECTURE A12b) and the shared settings model (UX-01/03).
 
-import { buildPath, isActive, matchPath, shouldInterceptClick } from '../../src/client/routeMatch.ts';
+import { buildPath, isActive, matchPath, shouldInterceptClick } from '../../src/shared/routeMatch.ts';
 import { DEFAULT_APPEARANCE, DEFAULT_READING, mergeAppearance, normaliseReading, readingCssVars } from '../../src/shared/settings.ts';
 
 type TestFn = (name: string, fn: () => void | Promise<void>) => void;
