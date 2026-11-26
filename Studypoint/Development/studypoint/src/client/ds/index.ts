@@ -1,4 +1,4 @@
-// Studypoint design system (DESIGN §5). Import components from here, never build ad-hoc controls.
+// Studyflare design system (DESIGN §5). Import components from here, never build ad-hoc controls.
 export { Button, IconButton } from './Button.tsx';
 export type { ButtonProps, ButtonVariant, IconButtonProps } from './Button.tsx';
 export { Switch, Checkbox } from './Toggle.tsx';

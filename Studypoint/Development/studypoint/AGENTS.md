@@ -1,9 +1,9 @@
-# AGENTS.md — Studypoint
+# AGENTS.md — Studyflare
 
-Rules for the AI coding agent working on Studypoint. **Alex chose Claude Code as the builder** on 2026-11-25. The rules still apply to any agent. `CLAUDE.md` points here.
+Rules for the AI coding agent working on Studyflare. **Alex chose Claude Code as the builder** on 2026-11-25. The rules still apply to any agent. `CLAUDE.md` points here.
 **Read this file first, then the doc for the area you're touching.** When this file and another doc disagree, stop and ask Alex. Don't guess.
 
-**Studypoint:** a single-user, AI-assisted study platform. React 19 + TypeScript + Vite + Tailwind v4 on **Cloudflare Workers (Paid)** + D1 + R2 + Vectorize + Workflows + Workers AI, behind **Cloudflare Access**. Gemini is used for published content only.
+**Studyflare** (renamed from Studypoint on 2026-11-26; folders and storage keep the old name): an AI-assisted study platform for one owner plus invited people, each with a separate account. React 19 + TypeScript + Vite + Tailwind v4 on **Cloudflare Workers (Paid)** + D1 + R2 + Vectorize + Workflows + Workers AI, behind **Cloudflare Access**. Gemini is used for published content only.
 
 ---
 

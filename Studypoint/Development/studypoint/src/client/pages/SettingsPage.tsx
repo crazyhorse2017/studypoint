@@ -8,6 +8,7 @@ import { resolveTheme, readOsScheme } from '../theme.ts';
 import { updateSettings, useSettings, type SaveState } from '../settingsStore.ts';
 import { StylePicker } from './StylePicker.tsx';
 import { SchoolPicker } from './SchoolPicker.tsx';
+import { PeopleSection } from './PeopleSection.tsx';
 import { useStudy } from '../studyStore.ts';
 
 const FONT_OPTIONS: ReadonlyArray<{ value: ReadingFont; label: string }> = [
@@ -31,13 +32,17 @@ export function SettingsPage() {
   const { school } = useStudy();
   const [changingSchool, setChangingSchool] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const r = settings.reading;
   const previewTheme = resolveTheme(settings.style, settings.theme, readOsScheme());
 
   useEffect(() => {
     fetch('/api/me')
-      .then((res) => (res.ok ? (res.json() as Promise<{ email?: string }>) : null))
-      .then((me) => setEmail(me?.email ?? null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ email?: string; owner?: boolean }>) : null))
+      .then((me) => {
+        setEmail(me?.email ?? null);
+        setIsOwner(me?.owner === true);
+      })
       .catch(() => setEmail(null));
   }, []);
 
@@ -110,7 +115,7 @@ export function SettingsPage() {
         <div className="rounded-md border border-border bg-surface p-4">
           <p className="mb-2 text-sm text-text-3">Preview</p>
           <p className="reading">
-            Entropy is a measure of how energy spreads out. Studypoint shows text from your sources in this reading style, with
+            Entropy is a measure of how energy spreads out. Studyflare shows text from your sources in this reading style, with
             citations you can open at the exact page.
           </p>
         </div>
@@ -150,6 +155,8 @@ export function SettingsPage() {
         )}
         <p className="text-sm text-text-2">New courses use this school. Courses you already added keep theirs.</p>
       </section>
+
+      {isOwner ? <PeopleSection /> : null}
 
       <section aria-labelledby="account-heading" className="flex flex-col gap-2">
         <h2 id="account-heading" className="text-xl font-semibold">

@@ -1,4 +1,4 @@
-# Studypoint — Database
+# Studyflare — Database
 
 | | |
 |---|---|
@@ -74,7 +74,7 @@ CREATE TABLE users (
   created_at INTEGER NOT NULL
 );
 
--- Every sign-in email that belongs to a user. Studypoint is single-user (PRD §2): all of Alex's allowed
+-- Every sign-in email that belongs to a user. Studyflare is single-user (PRD §2): all of Alex's allowed
 -- emails (school and personal) link to the ONE owner row, so either login shows the same library.
 -- CI and dev identities get their own users.
 CREATE TABLE user_emails (
@@ -532,6 +532,15 @@ CREATE TABLE backups (
   created_at INTEGER NOT NULL
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
+
+-- Added in migration 0002 (2026-11-26): people the owner invited (AUTH-06). App-level, not user-owned.
+-- Owners stay in the OWNER_EMAILS / ALLOWED_EMAILS secrets so a database change can never lock them out.
+CREATE TABLE allowed_emails (
+  email TEXT PRIMARY KEY,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member')),
+  added_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL
+);
 ```
 
 ## 4. Key queries

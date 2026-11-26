@@ -1,5 +1,5 @@
 """
-Runs Studypoint's pure-module test suites in headless Chrome/Edge, with no Node.js (TESTING §1).
+Runs Studyflare's pure-module test suites in headless Chrome/Edge, with no Node.js (TESTING §1).
 TypeScript is stripped on the fly by tests/ts_strip.py (erasable syntax only, AGENTS rule 21).
 Ported from Prizm's harness.
 

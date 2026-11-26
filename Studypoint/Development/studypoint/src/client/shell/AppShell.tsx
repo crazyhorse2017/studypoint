@@ -55,7 +55,7 @@ export function AppShell({ pathname, children }: { pathname: string; children: R
               <path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z" strokeLinejoin="round" />
               <path d="M12 6v13.5" />
             </svg>
-            Studypoint
+            Studyflare
           </Link>
           <nav aria-label="Primary" className="hidden md:block">
             <ul className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-# Studypoint — Planning Log
+# Studyflare — Planning Log
 
 Decisions made during the planning interview. These feed the final docs: PRD, ARCHITECTURE, DATABASE, DESIGN, AI_SYSTEM, IMPLEMENTATION, TASKS, TESTING, AGENTS.
 When a later decision replaces an earlier one, it is marked **SUPERSEDES**.

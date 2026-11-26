@@ -44,13 +44,13 @@ const IDENT = /^[a-z_][a-z0-9_]*$/;
  * Older export versions get upgrade functions here when the format changes (none yet).
  */
 export function parseExportDocument(input: unknown): ExportDocument {
-  if (typeof input !== 'object' || input === null) throw new ExportFormatError('Not a Studypoint export file.');
+  if (typeof input !== 'object' || input === null) throw new ExportFormatError('Not a Studyflare export file.');
   const doc = input as Record<string, unknown>;
-  if (doc['format'] !== 'studypoint-export') throw new ExportFormatError('Not a Studypoint export file.');
+  if (doc['format'] !== 'studypoint-export') throw new ExportFormatError('Not a Studyflare export file.');
   const version = doc['export_schema_version'];
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) throw new ExportFormatError('Export version is missing.');
   if (version > EXPORT_SCHEMA_VERSION) {
-    throw new ExportFormatError(`This export comes from a newer Studypoint (format ${version}). Update Studypoint first.`);
+    throw new ExportFormatError(`This export comes from a newer Studyflare (format ${version}). Update Studyflare first.`);
   }
   const tables = doc['tables'];
   if (typeof tables !== 'object' || tables === null || Array.isArray(tables)) throw new ExportFormatError('Export has no tables.');

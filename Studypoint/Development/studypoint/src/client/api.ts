@@ -20,7 +20,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, 'offline', "Studypoint can't be reached. Check your connection and try again.");
+    throw new ApiError(0, 'offline', "Studyflare can't be reached. Check your connection and try again.");
   }
   let data: unknown = null;
   try {

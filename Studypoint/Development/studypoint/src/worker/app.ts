@@ -10,6 +10,7 @@ import { getAppearance, patchAppearance } from './settings.ts';
 import { DuplicateCourse, createCourse, deleteCourse, getHomeSchool, listCourses, setHomeSchool, updateCourse } from './courses.ts';
 import { validateCourse, validateSchool } from '../shared/courses.ts';
 import { matchPath, type RouteParams } from '../shared/routeMatch.ts';
+import { PeopleError, addPerson, isInvited, isOwner, listPeople, normaliseEmail, removePerson, type PeopleEnv } from './people.ts';
 
 /** Small JSON bodies only (settings and similar). Imports have their own path. */
 const MAX_JSON_BYTES = 64 * 1024;
@@ -22,7 +23,7 @@ async function readJson(request: Request): Promise<unknown> {
 
 export const APP_VERSION = '0.1.0';
 
-export type Env = AuthEnv & {
+export type Env = AuthEnv & PeopleEnv & {
   ASSETS: Fetcher;
   /** D1, R2 and the rest are bound in T0.05; routes that need them answer 503 until then. */
   DB?: D1Database;
@@ -47,7 +48,7 @@ export type Route = {
   handler: (ctx: RequestContext) => Promise<Response> | Response;
 };
 
-const needsDb = () => apiError(503, 'storage_unavailable', "Studypoint's database isn't connected yet.");
+const needsDb = () => apiError(503, 'storage_unavailable', "Studyflare's database isn't connected yet.");
 
 /** Every API route. All of them sit behind `authenticate` (route-table test in workerApp.test.ts). */
 export const ROUTES: readonly Route[] = [
@@ -59,7 +60,55 @@ export const ROUTES: readonly Route[] = [
   {
     method: 'GET',
     path: '/api/me',
-    handler: ({ identity }) => json({ email: identity.email, via: identity.via }),
+    handler: ({ identity, env }) => json({ email: identity.email, via: identity.via, owner: identity.via === 'access' && isOwner(env, identity.email) }),
+  },
+  {
+    // AUTH-06: People (owners only). Adding/removing keeps the app list and Cloudflare Access in sync.
+    method: 'GET',
+    path: '/api/people',
+    handler: async ({ env, identity }) => {
+      if (!env.DB) return needsDb();
+      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
+      return json({ people: await listPeople(env.DB, env) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/people',
+    handler: async ({ request, env, identity, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That request couldn't be read.");
+      }
+      const email = normaliseEmail((body as Record<string, unknown> | null)?.['email']);
+      if (!email) return apiError(400, 'invalid_email', 'Enter a full email address, like name@example.com.');
+      try {
+        return json({ people: await addPerson(env.DB, env, email, userId) }, 201);
+      } catch (err) {
+        if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
+        throw err;
+      }
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/people/:email',
+    handler: async ({ env, identity, params }) => {
+      if (!env.DB) return needsDb();
+      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
+      const email = normaliseEmail(params['email']);
+      if (!email) return apiError(400, 'invalid_email', "That isn't a valid email.");
+      try {
+        return json({ people: await removePerson(env.DB, env, email) });
+      } catch (err) {
+        if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
+        throw err;
+      }
+    },
   },
   {
     // UX-01/03: appearance and reading settings.
@@ -189,7 +238,7 @@ export const ROUTES: readonly Route[] = [
         const bytes = new Uint8Array(await request.arrayBuffer());
         raw = bytes[0] === 0x1f && bytes[1] === 0x8b ? await gunzipJson(bytes) : JSON.parse(new TextDecoder().decode(bytes));
       } catch {
-        return apiError(400, 'unreadable_file', "That file couldn't be read. Choose a Studypoint export (.json or .json.gz).");
+        return apiError(400, 'unreadable_file', "That file couldn't be read. Choose a Studyflare export (.json or .json.gz).");
       }
       try {
         const doc = parseExportDocument(raw);
@@ -221,7 +270,8 @@ export function createApp(deps: AppDeps) {
     const config = readAuthConfig(env);
     const verifier = config.issuer && config.aud ? deps.makeVerifier(config) : NO_VERIFIER;
 
-    const auth = await authenticate(request, config, verifier);
+    const db = env.DB;
+    const auth = await authenticate(request, config, verifier, db ? (email) => isInvited(db, email) : undefined);
     if (!auth.ok) return apiError(auth.status, auth.code, auth.message);
 
     const matching = ROUTES.map((r) => ({ r, params: matchPath(r.path, url.pathname) })).filter((m) => m.params !== null);

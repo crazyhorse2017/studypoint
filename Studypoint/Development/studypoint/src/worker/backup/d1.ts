@@ -48,7 +48,7 @@ export async function userHasContent(db: D1Database, userId: string): Promise<bo
  */
 export async function restoreUser(db: D1Database, doc: ExportDocument, currentUserId: string, loginEmail: string, now = Date.now()): Promise<number> {
   if (await userHasContent(db, currentUserId)) {
-    throw new RestoreRefused('Restore only works on an empty Studypoint. Export and clear your current data first.');
+    throw new RestoreRefused('Restore only works on an empty Studyflare. Export and clear your current data first.');
   }
   const docUser = doc.tables['users']?.[0];
   const docUserId = docUser?.['id'];
@@ -66,31 +66,39 @@ export async function restoreUser(db: D1Database, doc: ExportDocument, currentUs
   return statements.length;
 }
 
-/** Nightly cron (EXP-02): back up the owner account to R2 and apply retention. */
-export async function runNightlyBackup(db: D1Database, bucket: R2Bucket, appVersion: string, now = new Date()): Promise<string | null> {
-  const owner = await db
-    .prepare('SELECT id FROM users WHERE email <> ? ORDER BY created_at ASC, id ASC LIMIT 1')
-    .bind(CI_USER_EMAIL)
-    .first<{ id: string }>();
-  if (!owner) return null; // nothing to back up yet (the app starts blank)
-
-  const key = backupKey(now);
-  const record = (status: 'ok' | 'failed', bytes: number | null, detail: string | null) =>
-    db
-      .prepare('INSERT INTO backups (id, r2_key, bytes, schema_version, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(uuid7(now.getTime()), key, bytes, EXPORT_SCHEMA_VERSION, status, detail, now.getTime())
-      .run();
-  try {
-    const body = await gzipJson(await exportUser(db, owner.id, appVersion, now));
-    await bucket.put(key, body, { httpMetadata: { contentType: 'application/gzip' } });
-    await record('ok', body.byteLength, null);
-  } catch (err) {
-    await record('failed', null, err instanceof Error ? err.message.slice(0, 500) : 'unknown error');
-    throw err;
+/** Nightly cron (EXP-02): back up EVERY account (except the CI test user) to R2, then apply retention. */
+export async function runNightlyBackup(db: D1Database, bucket: R2Bucket, appVersion: string, now = new Date()): Promise<string[]> {
+  const users = await db.prepare('SELECT id FROM users WHERE email <> ? ORDER BY created_at ASC').bind(CI_USER_EMAIL).all<{ id: string }>();
+  const written: string[] = [];
+  let firstError: unknown = null;
+  for (const { id } of users.results) {
+    const key = backupKey(now, id);
+    const record = (status: 'ok' | 'failed', bytes: number | null, detail: string | null) =>
+      db
+        .prepare('INSERT INTO backups (id, r2_key, bytes, schema_version, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(uuid7(now.getTime()), key, bytes, EXPORT_SCHEMA_VERSION, status, detail, now.getTime())
+        .run();
+    try {
+      const body = await gzipJson(await exportUser(db, id, appVersion, now));
+      await bucket.put(key, body, { httpMetadata: { contentType: 'application/gzip' } });
+      await record('ok', body.byteLength, null);
+      written.push(key);
+    } catch (err) {
+      // One account failing must not stop the others' backups.
+      await record('failed', null, err instanceof Error ? err.message.slice(0, 500) : 'unknown error');
+      firstError ??= err;
+    }
   }
 
-  const listed = await bucket.list({ prefix: BACKUP_PREFIX });
-  const stale = backupsToDelete(listed.objects.map((o) => o.key));
-  if (stale.length > 0) await bucket.delete(stale);
-  return key;
+  let cursor: string | undefined;
+  const keys: string[] = [];
+  do {
+    const page = await bucket.list({ prefix: BACKUP_PREFIX, cursor });
+    keys.push(...page.objects.map((o) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  const stale = backupsToDelete(keys);
+  for (let i = 0; i < stale.length; i += 1000) await bucket.delete(stale.slice(i, i + 1000));
+  if (firstError) throw firstError;
+  return written;
 }

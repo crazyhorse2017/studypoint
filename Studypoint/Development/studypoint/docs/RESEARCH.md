@@ -1,4 +1,4 @@
-# Studypoint — Research Findings (pass 1, 2026-11-25)
+# Studyflare — Research Findings (pass 1, 2026-11-25)
 
 Inputs to ARCHITECTURE, AI_SYSTEM and DATABASE. Every claim is either sourced or marked **to verify**. The full source list is in [[SOURCES]].
 
@@ -46,7 +46,7 @@ Inputs to ARCHITECTURE, AI_SYSTEM and DATABASE. Every claim is either sourced or
 - **Claude** has no free tier. It is the planned upgrade, behind the same provider interface.
 
 ## 5. Free-tier capacity for one user
-| Service | Free allowance | Impact on Studypoint |
+| Service | Free allowance | Impact on Studyflare |
 |---|---|---|
 | Workers | 100k requests/day | Plenty. |
 | D1 | 500 MB per DB, 5 GB per account, 5M rows read and 100k written per day, 7-day Time Travel | Fine. Time Travel is **7 days on Free** (30 on Paid), which corrects the earlier assumption, so scheduled R2 backups matter. |

@@ -1,5 +1,5 @@
 """
-Studypoint repo audit (TESTING §3, AGENTS §3). Static checks that need no Node.js.
+Studyflare repo audit (TESTING §3, AGENTS §3). Static checks that need no Node.js.
 
 Usage:
   uv run --no-project --python 3.12 python tests/verify_repo.py              # audit the repo

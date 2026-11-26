@@ -2,7 +2,8 @@
 // scoped to one user (DATABASE §5, AGENTS rule 8). tests/verify_schema.py checks this list against
 // the migrations: every user table present, every foreign-key parent listed earlier.
 //
-// Not exported: passages_fts (rebuilt on restore), backups and schema_meta (system tables).
+// Not exported: passages_fts (rebuilt on restore), and the system tables backups, schema_meta and
+// allowed_emails (the app-wide sign-in list from Settings → People, which isn't one person's study data).
 
 export type ExportTable = {
   name: string;

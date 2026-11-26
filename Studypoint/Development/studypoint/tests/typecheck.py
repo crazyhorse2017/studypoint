@@ -2,7 +2,7 @@
 Full TypeScript type check (`tsc --noEmit` equivalent) WITHOUT Node.js. Ported from Prizm's harness.
 
 How it works:
-  1. Downloads the TypeScript compiler and the type definitions Studypoint uses from the
+  1. Downloads the TypeScript compiler and the type definitions Studyflare uses from the
      official npm registry using only the Python standard library. Every tarball is
      verified against the registry's sha512 `integrity` hash before extraction.
      Only type files are kept, cached in %LOCALAPPDATA%/studypoint-typecheck-cache (outside the
@@ -192,7 +192,7 @@ def build_vfs() -> dict:
 
 
 # ----------------------------------------------------------- browser checker --
-CHECKER_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>Studypoint typecheck</title>
+CHECKER_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>Studyflare typecheck</title>
 <script src="/typescript.js"></script></head><body><pre id="out">running</pre>
 <script>
 (async () => {

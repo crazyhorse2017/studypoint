@@ -1,4 +1,4 @@
-# Studypoint — Product Requirements (PRD)
+# Studyflare — Product Requirements (PRD)
 
 | | |
 |---|---|
@@ -15,10 +15,10 @@ Requirement IDs (e.g. `LIB-03`) are stable. The other docs refer to them, so nev
 ## 1. Problem
 Course material for one student is spread across PDFs, slide decks, scans, handwritten notes and an Obsidian vault.
 General-purpose AI tools answer confidently without saying where an answer came from. Flashcard apps don't know what's in the course.
-Studypoint is one place where the material lives, where every AI answer is traceable to a page, and where review is scheduled by evidence-based algorithms instead of guesswork.
+Studyflare is one place where the material lives, where every AI answer is traceable to a page, and where review is scheduled by evidence-based algorithms instead of guesswork.
 
 ## 2. User
-A single user: Alex, a UMBC Mechanical Engineering student.
+Primarily one user, Alex, a UMBC Mechanical Engineering student, who can invite a few people (`AUTH-06`). Each invited person gets a separate account. There's no sharing between accounts.
 - Math-heavy engineering courses. **Which courses changes every semester, so the app assumes none** (`LIB-12`).
 - Studies mostly on a laptop or desktop.
 - Already keeps class notes in Obsidian.
@@ -73,7 +73,12 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   - A passkey can only be registered after verifying the email by PIN, and the same email allowlist applies to both methods.
 - **AUTH-02 MUST** — The Worker verifies the `Cf-Access-Jwt-Assertion` JWT on every API request: signature against the team certs, plus `iss` and `aud`. It never trusts the email header alone.
 - **AUTH-03 MUST** — After verification, the email must also be on the `ALLOWED_EMAILS` list (school and personal address). The list is a Worker variable or secret and is never committed.
-- **AUTH-03b MUST** — **One person, several logins.** Every allowed email signs in to the **same** account and library (the single-user owner). This is stored in `user_emails`. CI and dev identities stay separate.
+- **AUTH-03b MUST** — **One person, several logins.** The owner's emails (`OWNER_EMAILS` secret: Alex's school and personal addresses) all sign in to the **same** owner account. **Every other allowed email gets its own separate, empty account** and never sees the owner's data. Stored in `user_emails`. CI and dev identities stay separate. *(Changed 2026-11-26: before, every allowed email opened the owner account.)*
+- **AUTH-06 MUST** — **People.** Owners add or remove sign-in emails in Settings → People.
+  - The list lives in `allowed_emails` (migration 0002).
+  - Each change also updates the Cloudflare Access policy through a token scoped to Access edits. If Cloudflare refuses, the change is rolled back, so the two lists can't drift apart.
+  - Built-in owner emails can't be removed there.
+  - Removing someone blocks them immediately at the app check, even if their Access session hasn't expired. Their data is kept.
 - **AUTH-04 MUST** — Local dev bypass works only on localhost with an explicit dev variable. It is impossible in production.
 - **AUTH-05 MUST** — **Preview only:** a Cloudflare Access service token (`CI_SERVICE_TOKEN_ID`) maps to a dedicated CI test user for end-to-end tests, and `AI_FAKE=1` routes AI calls to recorded responses.
   A test asserts that both are unset in production (TESTING §5).
@@ -95,7 +100,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   Partial failures name the failing pages.
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
-- **LIB-08 MUST** — Notes written in Studypoint support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
+- **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
 - **LIB-09 MUST** — Studied-tracking per source, at the level of pages or sections: unread, read, or reviewed. It is updated automatically by reading and review, and can be overridden by hand.
 - **LIB-10 MUST** — Re-importing or editing a source creates a new **version**.
   Cards and questions linked to changed or removed passages are flagged "source changed" (`SRC-01`).
@@ -118,7 +123,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   - Codes are normalised (upper-case, single space).
   - Codes are checked against the school's code format: a default pattern, refined from codes already confirmed at that school.
   - In P1, code and title are entered by hand.
-- **INS-03 MUST (P2)** — **Add a course by code.** Alex types a code (e.g. `MATH 152`), and Studypoint looks it up **only on that school's own website domain**, which is the official source for its own courses. Then:
+- **INS-03 MUST (P2)** — **Add a course by code.** Alex types a code (e.g. `MATH 152`), and Studyflare looks it up **only on that school's own website domain**, which is the official source for its own courses. Then:
   1. It extracts the code, title, credits, description and prerequisites.
   2. **Mechanical checks:** the code and the title must appear **word for word** on the fetched page, and the page's final URL must be on the school's domain.
   3. A confirmation screen shows the result, with a citation chip to the catalog page.

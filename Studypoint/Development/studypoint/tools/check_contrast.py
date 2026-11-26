@@ -1,5 +1,5 @@
 ﻿"""
-WCAG contrast gate for Studypoint's design tokens (DESIGN §2.8, TESTING §1).
+WCAG contrast gate for Studyflare's design tokens (DESIGN §2.8, TESTING §1).
 
 Reads the colour tokens for every style × theme straight from src/client/styles/tokens.css
 (the single source of truth) and checks every text/background and non-text pair against its

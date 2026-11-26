@@ -49,7 +49,7 @@ export function register(test: TestFn, assert: Assert): void {
     const health = await app.fetch(new Request(BASE + '/api/health', { headers: signedIn }), ENV);
     assert.deepEqual(await health.json(), { status: 'ok', service: 'studypoint', version: APP_VERSION });
     const me = await app.fetch(new Request(BASE + '/api/me', { headers: signedIn }), ENV);
-    assert.deepEqual(await me.json(), { email: 'alex@example.com', via: 'access' });
+    assert.deepEqual(await me.json(), { email: 'alex@example.com', via: 'access', owner: false });
     assert.equal(seen.length, 2);
   });
 

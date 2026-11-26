@@ -1,4 +1,4 @@
-# Studypoint — Testing Strategy
+# Studyflare — Testing Strategy
 
 | | |
 |---|---|

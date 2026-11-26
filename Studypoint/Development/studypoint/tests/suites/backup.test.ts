@@ -46,9 +46,9 @@ export function register(test: TestFn, assert: Assert): void {
 
   test('import: malformed or hostile documents are rejected before touching the database', () => {
     const good = JSON.parse(JSON.stringify(doc({})));
-    rejects(assert, null, 'not a studypoint');
-    rejects(assert, { ...good, format: 'other' }, 'not a studypoint');
-    rejects(assert, { ...good, export_schema_version: EXPORT_SCHEMA_VERSION + 1 }, 'newer studypoint');
+    rejects(assert, null, 'not a studyflare');
+    rejects(assert, { ...good, format: 'other' }, 'not a studyflare');
+    rejects(assert, { ...good, export_schema_version: EXPORT_SCHEMA_VERSION + 1 }, 'newer studyflare');
     rejects(assert, { ...good, tables: { ...good.tables, evil: [] } }, 'unknown table');
     rejects(assert, { ...good, tables: { ...good.tables, courses: [{ 'id) VALUES (1); DROP TABLE users; --': 'x' }] } }, 'valid name');
     rejects(assert, { ...good, tables: { ...good.tables, courses: [{ id: { nested: true } }] } }, 'unsupported value');
@@ -115,34 +115,43 @@ export function register(test: TestFn, assert: Assert): void {
   });
 
   test('backup: keys are dated by UTC day', () => {
-    assert.equal(backupKey(new Date(Date.UTC(2027, 2, 9, 23, 59))), 'backups/2027-03-09.json.gz');
+    assert.equal(backupKey(new Date(Date.UTC(2027, 2, 9, 23, 59)), 'u-1'), 'backups/u-1/2027-03-09.json.gz');
+    assert.throws(() => backupKey(new Date(), '../etc'), 'user ids cannot escape the prefix');
   });
 
-  test('backup retention: keep the newest 30 dailies plus the first backup of each of the last 12 months', () => {
+  test('backup retention: per account, keep the newest 30 dailies plus the first backup of each of the last 12 months', () => {
     const keys: string[] = [];
-    for (let d = 0; d < 500; d += 1) keys.push(backupKey(new Date(Date.UTC(2026, 0, 1) + d * 86400000)));
-    keys.push('backups/notes.txt', 'other/2026-01-01.json.gz');
+    for (let d = 0; d < 500; d += 1) keys.push(backupKey(new Date(Date.UTC(2026, 0, 1) + d * 86400000), 'alex'));
+    for (let d = 0; d < 5; d += 1) keys.push(backupKey(new Date(Date.UTC(2026, 0, 1) + d * 86400000), 'friend'));
+    keys.push('backups/notes.txt', 'other/2026-01-01.json.gz', 'backups/2026-01-01.json.gz');
     const del = new Set(backupsToDelete(keys));
     const kept = keys.filter((k) => !del.has(k));
-    assert.ok(!del.has('backups/notes.txt') && !del.has('other/2026-01-01.json.gz'), 'unrelated keys are never deleted');
+    assert.ok(!del.has('backups/notes.txt') && !del.has('other/2026-01-01.json.gz') && !del.has('backups/2026-01-01.json.gz'), 'unrelated keys are never deleted');
     const newest = keys.slice(0, 500).slice(-30);
     for (const k of newest) assert.ok(!del.has(k), `newest daily kept: ${k}`);
-    const monthlyKept = kept.filter((k) => k.endsWith('-01.json.gz'));
+    const monthlyKept = kept.filter((k) => k.startsWith('backups/alex/') && k.endsWith('-01.json.gz'));
     assert.ok(monthlyKept.length >= 12, `12 monthly backups kept, got ${monthlyKept.length}`);
-    assert.ok(del.has('backups/2026-01-01.json.gz'), 'month older than 12 months is dropped');
-    assert.ok(kept.length <= 30 + 12 + 2);
+    assert.ok(del.has('backups/alex/2026-01-01.json.gz'), 'month older than 12 months is dropped');
+    for (let d = 0; d < 5; d += 1) assert.ok(!del.has(backupKey(new Date(Date.UTC(2026, 0, 1) + d * 86400000), 'friend')), "another account's recent backups are kept");
   });
 
-  test('users (AUTH-03b): a second allowed email links to the existing owner account', () => {
+  test('users (AUTH-03b): an OWNER email links to the existing owner account', () => {
     const owner = { id: 'owner', email: 'school@example.edu' };
-    assert.deepEqual(resolveUser({ email: 'personal@example.com', via: 'access' }, null, owner), { action: 'link', userId: 'owner' });
-    assert.deepEqual(resolveUser({ email: 'school@example.edu', via: 'access' }, owner, owner), { action: 'existing', userId: 'owner' });
-    assert.deepEqual(resolveUser({ email: 'first@example.com', via: 'access' }, null, null), { action: 'create' });
+    assert.deepEqual(resolveUser({ email: 'personal@example.com', via: 'access' }, null, owner, true), { action: 'link', userId: 'owner' });
+    assert.deepEqual(resolveUser({ email: 'school@example.edu', via: 'access' }, owner, owner, true), { action: 'existing', userId: 'owner' });
+    assert.deepEqual(resolveUser({ email: 'first@example.com', via: 'access' }, null, null, true), { action: 'create' });
+  });
+
+  test('users (AUTH-03b): an invited non-owner email gets its OWN account, never the owner\'s', () => {
+    const owner = { id: 'owner', email: 'school@example.edu' };
+    assert.deepEqual(resolveUser({ email: 'friend@example.com', via: 'access' }, null, owner, false), { action: 'create' });
+    const friend = { id: 'friend', email: 'friend@example.com' };
+    assert.deepEqual(resolveUser({ email: 'friend@example.com', via: 'access' }, friend, owner, false), { action: 'existing', userId: 'friend' });
   });
 
   test('users (AUTH-03b): CI and dev identities never join the owner account', () => {
     const owner = { id: 'owner', email: 'school@example.edu' };
-    assert.deepEqual(resolveUser({ email: 'ci@studypoint.invalid', via: 'ci' }, null, owner), { action: 'create' });
-    assert.deepEqual(resolveUser({ email: 'dev@example.com', via: 'dev' }, null, owner), { action: 'create' });
+    assert.deepEqual(resolveUser({ email: 'ci@studypoint.invalid', via: 'ci' }, null, owner, true), { action: 'create' });
+    assert.deepEqual(resolveUser({ email: 'dev@example.com', via: 'dev' }, null, owner, true), { action: 'create' });
   });
 }

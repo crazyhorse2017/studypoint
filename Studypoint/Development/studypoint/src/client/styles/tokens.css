@@ -1,4 +1,4 @@
-/* Studypoint design tokens (DESIGN §2): 3 styles × 2 themes.
+/* Studyflare design tokens (DESIGN §2): 3 styles × 2 themes.
    Source of truth for colours. tools/check_contrast.py reads this file and fails CI if any pair drops below its WCAG floor.
    Applied via <html data-style="paper|lab|midnight" data-theme="light|dark">. Components use var(--…) only (AGENTS 18). */
 

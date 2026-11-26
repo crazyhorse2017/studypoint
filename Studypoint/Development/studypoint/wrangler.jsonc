@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "studypoint",
+  // Renamed from "studypoint" on 2026-11-26: served at studyflare.r279.workers.dev. The old address redirects here.
+  // Storage keeps its original names (studypoint-db, passages-v1); renaming them would mean migrating data for no benefit.
+  "name": "studyflare",
   "main": "./src/worker/index.ts",
   "compatibility_date": "2026-11-20",
   // Served at studypoint.<subdomain>.workers.dev (ARCHITECTURE A2). Cloudflare Access is enabled on this route in T0.07.
@@ -16,13 +18,17 @@
   "observability": { "enabled": true },
   // EXP-02: nightly backup at 08:00 UTC (about 03:00 in Maryland in winter, 04:00 in summer).
   "triggers": { "crons": ["0 8 * * *"] },
-  // Auth (AUTH-01..05), set up in T0.07 on 2026-11-26: Access app "Studypoint" (email PIN, 30-day sessions,
-  // "Studypoint owner" policy). These two values are public identifiers, not secrets. ALLOWED_EMAILS is a
-  // Worker SECRET (already set on the account); never put it here.
+  // Auth (AUTH-01..06): Access app "Studyflare" (passkey or email PIN, 30-day sessions, "Studyflare people"
+  // policy). These values are public identifiers, not secrets. ALLOWED_EMAILS, OWNER_EMAILS and
+  // CF_ACCESS_API_TOKEN are Worker SECRETS; never put them here.
   "vars": {
     "ENVIRONMENT": "production",
     "ACCESS_TEAM_DOMAIN": "shrill-hat-b870.cloudflareaccess.com",
-    "ACCESS_AUD": "70ec5742ef21a1fbb6e1514cebcf3ef8a1719921cf5befd0c2b74290dfbb2ff4"
+    "ACCESS_AUD": "70ec5742ef21a1fbb6e1514cebcf3ef8a1719921cf5befd0c2b74290dfbb2ff4",
+    // Settings → People keeps this Access app's policy in sync with the app's list (AUTH-06).
+    "CF_ACCOUNT_ID": "d56562d185ec18c7996857419e4139b5",
+    "ACCESS_APP_ID": "e4934507-b2ea-4a30-8e10-903e5f93e5e1",
+    "ACCESS_POLICY_ID": "e935b184-214c-43a2-828e-a80619913ba3"
   },
   // T0.05: storage. Created 2026-11-26; 0001_init.sql applied (schema fingerprint verified against the file).
   // R2 (FILES), Workers AI (AI) and the ingestion Workflow are added once Workers Paid is active.

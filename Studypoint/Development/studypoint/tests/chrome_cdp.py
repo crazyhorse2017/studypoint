@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-# Ported from Prizm's harness. Studypoint adds Linux paths so the same runner works in GitHub Actions.
+# Ported from Prizm's harness. Studyflare adds Linux paths so the same runner works in GitHub Actions.
 CHROME_PATHS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",

@@ -1,4 +1,4 @@
-# LIB-12: Studypoint ships blank. These strings must never appear in app code (src/, index.html).
+# LIB-12: Studyflare ships blank. These strings must never appear in app code (src/, index.html).
 # Matching ignores case and spacing, so "MATH 152" also matches "math152".
 # Add fixture source titles here as fixtures are created.
 MATH 152

@@ -1,4 +1,4 @@
-# Studypoint — Implementation Plan
+# Studyflare — Implementation Plan
 
 | | |
 |---|---|
@@ -6,7 +6,7 @@
 | Inputs | [[PRD]] (phases §5), [[ARCHITECTURE]], [[DATABASE]], [[AI_SYSTEM]], [[DESIGN]] |
 | Task breakdown | [[TASKS]] · Test plan: [[TESTING]] · Agent rules: [[AGENTS]] |
 
-This doc covers **how** and **in what order** Studypoint gets built: environments, workflow, dependencies, phase milestones, spikes and exit criteria. Individual tasks are in [[TASKS]].
+This doc covers **how** and **in what order** Studyflare gets built: environments, workflow, dependencies, phase milestones, spikes and exit criteria. Individual tasks are in [[TASKS]].
 
 ---
 
@@ -35,10 +35,14 @@ This doc covers **how** and **in what order** Studypoint gets built: environment
   `npm run typecheck && python3 tests/verify_repo.py && python3 tests/verify_schema.py && python3 tools/check_contrast.py && npm run build`.
   A failing check blocks the deploy. The build image has Python 3.14. Browser-based JS tests can't run there (no Chrome), so they stay local until GitHub Actions is active.
 - **GitHub Actions** only reads `.github/workflows/` at the repo root, so the nested workflows don't run yet. Moving the project to the repo root (or adding a root workflow with `working-directory`) turns them on.
-- Live at `https://studypoint.r279.workers.dev`. Preview URLs are off until the protected preview environment exists.
+- Live at `https://studyflare.r279.workers.dev`. This was renamed from Studypoint on 2026-11-26, and the old `studypoint.r279.workers.dev` redirects. Preview URLs are off until the protected preview environment exists.
+- **Secrets on the `studyflare` Worker:**
+  - `ALLOWED_EMAILS`: built-in sign-in emails (the owner's).
+  - `OWNER_EMAILS`: emails that open the owner's account.
+  - `CF_ACCESS_API_TOKEN`: a Cloudflare API token limited to "Access: Apps and Policies → Edit", used by Settings → People.
 - **Sign-in (T0.07):**
-  - Cloudflare Access app "Studypoint" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
-  - 30-day sessions, and the "Studypoint owner" policy listing Alex's two emails.
+  - Cloudflare Access app "Studyflare" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
+  - 30-day sessions, and the "Studyflare owner" policy listing Alex's two emails.
   - Login methods (2026-11-26): **Passkeys** (Access built-in identity provider `89b2b103…`) and **email PIN**. With two methods there's a chooser page instead of an auto-redirect.
   - Passkeys are registered from the sign-in page after verifying by PIN, and managed under "Manage passkeys".
   - **Verified 2026-11-26 by Alex:** a passkey sign-in token carries the email claim. The app's `ALLOWED_EMAILS` check passes, and Settings shows "Signed in as …".
@@ -133,7 +137,7 @@ Rules:
 12. Golden eval set v1 from Alex's real material, with the eval CI job (AI_SYSTEM §11).
 
 **Exit criteria:**
-- Starting from a blank app (`LIB-12`), Alex adds his Spring 2027 courses and sources himself and uses Studypoint for one full week of real coursework.
+- Starting from a blank app (`LIB-12`), Alex adds his Spring 2027 courses and sources himself and uses Studyflare for one full week of real coursework.
 - `NFR-ACC` targets are met on the eval set.
 - `NFR-PERF` targets are met on production.
 - No open P1 accessibility bugs.

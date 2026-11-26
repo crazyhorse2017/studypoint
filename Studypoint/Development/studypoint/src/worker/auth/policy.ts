@@ -33,6 +33,8 @@ export type AuthEnv = {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   ALLOWED_EMAILS?: string;
+  /** Emails that all open the OWNER's account (AUTH-03b). Other allowed emails get their own accounts. */
+  OWNER_EMAILS?: string;
   DEV_USER_EMAIL?: string;
   CI_SERVICE_TOKEN_ID?: string;
   AI_FAKE?: string;
@@ -99,7 +101,7 @@ const deny = (status: 401 | 403 | 503, code: string, message: string): AuthDecis
 export function configProblem(config: AuthConfig): AuthDecision | null {
   if (config.environment === 'production' && (config.ciServiceTokenId || config.aiFake)) {
     // AUTH-05: the CI token mapping and AI_FAKE exist only in preview. Refuse to run if they leak into production.
-    return deny(503, 'unsafe_config', 'Studypoint is misconfigured: test-only settings are present in production.');
+    return deny(503, 'unsafe_config', 'Studyflare is misconfigured: test-only settings are present in production.');
   }
   if (config.environment !== 'development' && (!config.issuer || !config.aud)) {
     return deny(503, 'auth_not_configured', "Sign-in isn't configured yet (ACCESS_TEAM_DOMAIN / ACCESS_AUD).");
@@ -118,7 +120,7 @@ export function decideFromClaims(config: AuthConfig, claims: AccessClaims): Auth
   if (typeof claims.email === 'string' && claims.email.includes('@')) {
     const email = claims.email.trim().toLowerCase();
     if (isEmailAllowed(email, config.allowed)) return { ok: true, identity: { email, via: 'access' } };
-    return deny(403, 'not_allowed', "This account isn't allowed to use Studypoint.");
+    return deny(403, 'not_allowed', "This account isn't allowed to use Studyflare.");
   }
   if (
     config.environment === 'preview' &&
@@ -128,5 +130,5 @@ export function decideFromClaims(config: AuthConfig, claims: AccessClaims): Auth
   ) {
     return { ok: true, identity: { email: CI_USER_EMAIL, via: 'ci' } };
   }
-  return deny(403, 'not_allowed', "This account isn't allowed to use Studypoint.");
+  return deny(403, 'not_allowed', "This account isn't allowed to use Studyflare.");
 }

@@ -1,4 +1,4 @@
-# Studypoint — Sources
+# Studyflare — Sources
 
 Every external source used during planning, grouped by topic. Findings are summarized in [[RESEARCH]]. Decisions are in [[PLANNING_LOG]].
 Accessed 2026-11-25 unless noted. Cloudflare and Google pricing and limits change often, so re-check them before relying on a number.

@@ -1,4 +1,4 @@
-# Studypoint — AI System
+# Studyflare — AI System
 
 | | |
 |---|---|
@@ -235,7 +235,7 @@ The generator is asked for a target level. The validator's estimate overrides it
     1. Export `review_log` as the FSRS CSV format.
     2. Run the Python **FSRS-Optimizer** locally with `uv run` (BSD-3).
     3. Paste the parameters into Settings.
-    4. Studypoint checks log loss on the last 20% of reviews (time-ordered hold-out) with the old and new parameters, and adopts the new ones only if they're better.
+    4. Studyflare checks log loss on the last 20% of reviews (time-ordered hold-out) with the old and new parameters, and adopts the new ones only if they're better.
   - Minimum data is **≥ 1,000 reviews** across at least 30 days. This is our conservative assumption, since the FSRS docs threshold wasn't found. **To verify**.
   - Re-running doesn't change history: card states are recomputed from `review_log` with the new parameters.
 

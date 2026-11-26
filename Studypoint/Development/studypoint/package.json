@@ -1,9 +1,9 @@
 {
-  "name": "studypoint",
+  "name": "studyflare",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Studypoint: a single-user, AI-assisted study platform on Cloudflare Workers.",
+  "description": "Studyflare: an AI-assisted study platform on Cloudflare Workers.",
   "engines": {
     "node": ">=22.12.0"
   },
