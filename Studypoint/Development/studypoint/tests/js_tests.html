@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Studypoint JS test runner</title>
+  </head>
+  <body>
+    <pre id="output">Running…</pre>
+    <script type="module">
+      // Register new suites here: name -> module path. Each module exports register(test, assert).
+      const suitesMap = {
+        uuid7: './suites/uuid7.test.ts',
+        workerHttp: './suites/workerHttp.test.ts',
+        theme: './suites/theme.test.ts',
+        privacy: './suites/privacy.test.ts',
+      };
+
+      const params = new URLSearchParams(window.location.search);
+      const suite = params.get('suite') || 'all';
+
+      const results = [];
+      const test = (name, fn) => results.push({ name, fn });
+
+      const assert = {
+        ok(cond, msg = 'Expected condition to be truthy') {
+          if (!cond) throw new Error(msg);
+        },
+        equal(actual, expected, msg) {
+          if (actual !== expected) throw new Error(msg || `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+        },
+        notEqual(actual, expected, msg) {
+          if (actual === expected) throw new Error(msg || `Expected values not to equal ${JSON.stringify(actual)}`);
+        },
+        deepEqual(actual, expected, msg) {
+          const a = JSON.stringify(actual);
+          const b = JSON.stringify(expected);
+          if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`);
+        },
+        match(str, regex, msg) {
+          if (!regex.test(String(str))) throw new Error(msg || `Expected ${JSON.stringify(str)} to match ${regex}`);
+        },
+        throws(fn, msg = 'Expected function to throw') {
+          let threw = false;
+          try { fn(); } catch { threw = true; }
+          if (!threw) throw new Error(msg);
+        },
+      };
+
+      const selected = suite === 'all' ? Object.keys(suitesMap) : suite.split(',');
+      let passed = 0;
+      let failed = 0;
+      const failures = [];
+      const logs = [];
+
+      try {
+        for (const name of selected) {
+          const path = suitesMap[name];
+          if (!path) throw new Error(`Unknown test suite: ${name}`);
+          const mod = await import(path);
+          mod.register(test, assert);
+        }
+        for (const item of results) {
+          try {
+            await item.fn();
+            passed += 1;
+            logs.push(`PASS: ${item.name}`);
+          } catch (err) {
+            failed += 1;
+            const message = err?.stack || err?.message || String(err);
+            failures.push({ name: item.name, message });
+            logs.push(`FAIL: ${item.name}\n  ${message}`);
+          }
+        }
+      } catch (loadErr) {
+        failed += 1;
+        const message = loadErr?.stack || loadErr?.message || String(loadErr);
+        failures.push({ name: 'Module load error', message });
+        logs.push(`FAIL: Module load error\n  ${message}`);
+      }
+
+      window.__STUDYPOINT_TEST_REPORT__ = { passed, failed, total: passed + failed, failures, logs };
+      document.getElementById('output').textContent =
+        logs.join('\n') + `\n\nSummary: ${passed}/${passed + failed} passed, ${failed} failed.`;
+    </script>
+  </body>
+</html>

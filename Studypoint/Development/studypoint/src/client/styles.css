@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+/* Expose the design tokens to Tailwind utilities (bg-surface, text-text-2, rounded-md, …).
+   `inline` keeps them as live var() references, so switching style/theme needs no rebuild. */
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-chip-text: var(--chip-text);
+  --color-general-bg: var(--general-bg);
+  --color-general-text: var(--general-text);
+  --color-general-rule: var(--general-rule);
+  --color-unverified-bg: var(--unverified-bg);
+  --color-unverified-text: var(--unverified-text);
+  --color-again-bg: var(--again-bg);
+  --color-again-text: var(--again-text);
+  --color-hard-bg: var(--hard-bg);
+  --color-hard-text: var(--hard-text);
+  --color-good-bg: var(--good-bg);
+  --color-good-text: var(--good-text);
+  --color-easy-bg: var(--easy-bg);
+  --color-easy-text: var(--easy-text);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-reading: var(--ff-reading);
+  --font-ui: var(--ff-ui);
+  --font-mono: var(--ff-mono);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --shadow-pop: var(--sh-pop);
+}
+
+@layer base {
+  html {
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--ff-ui);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  /* DESIGN §2.7: 2px accent outline, never hidden, survives forced-colours mode. */
+  :focus-visible {
+    outline: var(--focus-width) solid var(--accent);
+    outline-offset: var(--focus-offset);
+  }
+
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
+  .reading {
+    font-family: var(--ff-reading);
+    font-size: var(--fs-reading);
+    line-height: var(--lh-reading);
+    max-width: var(--reading-width);
+  }
+}

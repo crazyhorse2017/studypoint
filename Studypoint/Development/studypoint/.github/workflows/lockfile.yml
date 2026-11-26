@@ -1,0 +1,25 @@
+name: Generate lockfile
+
+# There's no local Node, so the lockfile is generated here.
+# Run this from the Actions tab ("Run workflow"), download the package-lock artifact,
+# and upload package-lock.json to the repo root.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Resolve dependencies
+        run: npm install --package-lock-only --no-audit --no-fund
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json

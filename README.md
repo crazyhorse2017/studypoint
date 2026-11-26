@@ -1,2 +1,0 @@
-# studypoint
-Personal Study App

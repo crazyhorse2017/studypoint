@@ -1,0 +1,103 @@
+# Studypoint — Tasks
+
+| | |
+|---|---|
+| Status | **Approved v1.0**, 2026-11-25. P0 and P1 are detailed. P2–P4 are at epic level and get broken down at the start of each phase |
+| Source | [[IMPLEMENTATION]] §5. Requirement IDs come from [[PRD]] |
+
+**Format:** `- [ ] **T<phase>.<nn>** Title — reqs · depends on · **done when**`
+Each task is sized for one PR (roughly 0.5–2 days). Check a task off only when its "done when" holds **and** CI is green ([[IMPLEMENTATION]] §6).
+
+---
+
+## P0 — Foundations
+### Setup
+- [ ] **T0.01** Create the GitHub repo `studypoint` (private). The method is known: Alex uploads via github.com (recorded in AGENTS.md §2) — `NFR-BUILD` · — · **done when** a first upload lands on `main`
+- [ ] **T0.02** *(files done 2026-11-26; waiting on the first Workers Builds deploy)* Scaffold: Vite + React 19 + TS + Tailwind v4 + `@cloudflare/vite-plugin`, `wrangler.jsonc` with `ASSETS` and `run_worker_first: ["/api/*"]`, repo layout from ARCHITECTURE §6 — `NFR-BUILD` · T0.01 · **done when** a Workers Builds deploy serves a placeholder page
+- [x] **T0.03** *(done 2026-11-26: 11 JS tests, typecheck 0 errors, audit 13 rules with a 34-case self-test)* Port Prizm's harness (`ts_strip.py`, `chrome_cdp.py`, `run_js_tests.py`, `typecheck.py`) and write a Studypoint `verify_repo.py` with the audit rules in TESTING §3 — `NFR-TEST` · T0.02 · **done when** all three commands run locally and a deliberately planted `<select>` fails the audit
+- [ ] **T0.04** *(started: `ci.yml` runs the Python checks plus typecheck and build, and `lockfile.yml` exists. Vitest, pool-workers and end-to-end jobs get added once there's something for them to test)* GitHub Actions `ci.yml`: install, tsc, vitest, pool-workers integration, contrast check, build. Separate `e2e.yml` against the preview URL — `NFR-TEST` · T0.02 · **done when** a PR shows all jobs green
+- [ ] **T0.05** Cloudflare resources: D1 `studypoint-db` + `-preview`, R2 `studypoint-files` + `-preview`, Vectorize `passages-v1` + `passages-preview` (768-d cosine with metadata indexes), Workers AI binding, Workflow binding, `preview` env in wrangler — ARCHITECTURE §5 · T0.02 · **done when** both envs deploy with all bindings resolved
+- [ ] **T0.06** Buy Workers Paid (Alex), then enable the cron trigger — IMPLEMENTATION §1 · — · **done when** the account shows the Paid plan
+
+### Spikes (each gives a go/no-go note in `docs/spikes/`)
+- [ ] **T0.07 SPIKE P0-ACCESS** Access on the workers.dev route, an email-PIN policy for both emails, a service token for CI on preview — `AUTH-01` · T0.05 · **done when** a browser login works, a curl with the service token reaches preview, and an unknown email is refused
+- [ ] **T0.08 SPIKE P0-FSRS** ts-fsrs in the browser bundle and the Worker, pinned to FSRS-6, recomputing state from a synthetic log — `CRD-05` · T0.03 · **done when** both runtimes give identical schedules for 1,000 synthetic reviews
+- [ ] **T0.09 SPIKE P0-PDF** pdf.js page → WebP in the browser, unpdf per-page text and positions in the Worker, on 3 of Alex's real PDFs (text, slides-as-PDF, scan) — `LIB-03/04` · T0.05 · **done when** page images and per-page text are stored in R2 for all 3 and timings are recorded
+- [ ] **T0.10 SPIKE P0-AI-1** model bake-off per AI_SYSTEM §2: 20 chat questions, 20 generations, 10 OCR pages (5 handwritten), per route — `PRV-02`, `NFR-ACC` · T0.05 · **done when** the results table and model decisions are written into AI_SYSTEM §2
+
+### Platform
+- [ ] **T0.11** *(2026-11-26: `0001_init.sql` generated from DATABASE.md, 42 tables. `tests/verify_schema.py` 12/12 on SQLite, covering drift vs. the doc, FKs, CHECKs, the empty start and the FTS triggers. Remaining: apply to real D1 in CI after T0.05)* `0001_init.sql`: the **full** schema from DATABASE §3 in dependency order, plus a migration test (applies cleanly, FKs enforced, FTS triggers work) — DATABASE · T0.05 · **done when** the integration test passes in CI
+- [ ] **T0.12** Auth middleware: JWT verify (`jose`, certs, iss, aud), `ALLOWED_EMAILS`, localhost-only dev bypass, user upsert. A route-table test asserts every `/api/*` route is protected — `AUTH-02..04` · T0.07, T0.11 · **done when** tests cover a valid token, bad signature, wrong aud, disallowed email, and dev bypass on a non-localhost host
+- [ ] **T0.13** API foundation: router, zod validation, error format, security headers (CSP etc.), request logging — ARCHITECTURE §3.2 · T0.12 · **done when** the headers are verified by an integration test
+- [ ] **T0.14** *(2026-11-26: privacy core done in `src/worker/ai/`: providers, privacy and config. That covers `effectivePrivacy`, `PrivacyViolation`, the mixed-privacy chat plan, `AI_MODELS` parsing that rejects unsafe personal routes, and a 5,000-case seeded property test. Remaining: Gemini/Workers AI clients, metering, the recording-fake integration test)* AI gateway: `ContentPart`, `effectivePrivacy`, the `PrivacyViolation` assertion, provider capability table, `AI_MODELS` config parsing, `generations` and `ai_usage` metering, Gemini REST + Workers AI clients — `PRV-02`, `NFR-PORT` · T0.10, T0.11 · **done when** the property test and the fake-Gemini request-recording test pass (TESTING §4.3)
+- [ ] **T0.15** JSON export + restore-to-empty, plus the nightly backup cron to R2 with retention — `EXP-01/02` · T0.11 · **done when** a round-trip test (export → empty DB → restore → export) gives identical JSON and the cron writes a backup on preview
+
+### Design system & settings
+- [x] **T0.16** *(done 2026-11-26: `src/client/styles/tokens.css` + Tailwind `@theme inline`. `check_contrast.py` now reads the CSS and fails CI on any drop, which I confirmed by weakening a colour. Style/theme resolver with tests. A visual check on the first preview deploy is still to come)* Tokens for 3 styles × 2 themes as CSS variables + Tailwind `@theme`. Port `check_contrast.py` to read tokens from the CSS source — `UX-01/02` · T0.02 · **done when** CI fails if any pair drops below its floor
+- [ ] **T0.17** Self-hosted fonts (Literata, Inter, JetBrains Mono, Atkinson Hyperlegible, OpenDyslexic), subset to woff2 — DESIGN §2.6 · T0.16 · **done when** fonts load under the CSP with no external requests
+- [ ] **T0.18** Core components: Button, IconButton, TextField, TextArea, Switch, Checkbox, RadioGroup, SegmentedControl, Slider, Select, Dialog, ConfirmDialog, Toast, Tooltip, Menu, Tabs, FileDrop, plus the `ds` gallery route — `UX-02` · T0.16 · **done when** each passes axe and the keyboard tests in TESTING §6 in all 6 style × theme combinations
+- [ ] **T0.19** App shell: sidebar, top bar, bottom nav at phone width, routing, focus management on navigation — `NFR-RESP` · T0.18 · **done when** reflow at 320 px passes and route changes move focus to the `h1`
+- [ ] **T0.20** Settings v1: style picker (live preview grid), theme, reading settings, reduce motion, shortcuts toggle, all persisted to `settings` — `UX-01/03/06` · T0.18, T0.12 · **done when** changes apply instantly and survive a reload on production
+
+**P0 exit check:** see [[IMPLEMENTATION]] §5.
+
+---
+
+## P1 — Core study loop
+- [ ] **T1.01** P1 wireframes (Today, Library, Reader, Assistant, Card tray, Review, Flags) reviewed with Alex — DESIGN §6 · P0 · **done when** Alex approves them
+- [ ] **T1.02a** `tools/build_institutions.py`: download the federal College Scorecard/IPEDS bulk file and emit `public/data/institutions-<year>.json.gz` (`unitid`, name, aliases, city, state, level, domain). Confirm the licence and that 2-year colleges are included — `INS-01/07` · T0.02 · **done when** the file is built, its size is recorded in ARCHITECTURE A16, and spot checks find UMBC by "UMBC" and a community college by name
+- [ ] **T1.02b** School picker: directory typeahead in a Web Worker, `Combobox`, "Not listed" form, home school in settings — `INS-01` · T1.02a, T0.18 · **done when** keyboard and screen-reader use passes and the choice persists
+- [ ] **T1.02** Courses / units / topics / tags CRUD with sidebar tree. Courses carry school (home by default, overridable) + code + official title, with format check and normalisation — `LIB-01`, `INS-02` · T1.01, T1.02b · **done when** end-to-end create/rename/reorder/delete works, including undo, and codes are normalised
+- [ ] **T1.03** Command palette (⌘K) and the keyboard shortcut system — DESIGN §7 · T1.02 · **done when** all shortcuts in DESIGN §7 work and can be disabled
+- [ ] **T1.04** Upload flow: hash + duplicate check, streaming to R2, magic-byte type check, SVG rejected, 100 MB limit — `LIB-02`, `LIB-11`, `NFR-SEC` · T1.02 · **done when** tests cover each allowed type plus a spoofed extension and an SVG
+- [ ] **T1.05** Browser page renderer: PDF pages → WebP (from T0.09) with upload progress — ARCHITECTURE A5 · T1.04 · **done when** a 50-page PDF renders and uploads with visible progress
+- [ ] **T1.06** Ingestion Workflow skeleton: steps, idempotency keys, status writes, retry/backoff — `LIB-05` · T1.04 · **done when** an injected step failure retries and status reflects every step
+- [ ] **T1.07** Extract PDF (unpdf text + positions) and Markdown/Obsidian (heading split) — `LIB-02/03` · T1.06 · **done when** the fixture PDF and `.md` give the expected locations and labels
+- [ ] **T1.08** Extract PPTX (fflate + slide XML + notes + media) and DOCX (`toMarkdown`, heading path + paragraph index), plus "Attach PDF export" — `LIB-02/03/06` · T1.06 · **done when** the fixture deck gives the right slide numbers and DOCX locations are labelled
+- [ ] **T1.09** Classify + OCR step: thresholds, privacy-routed vision, confidence heuristic, `[illegible]` handling — `LIB-04`, `PRV-02` · T1.07, T0.14 · **done when** a scanned fixture is OCR'd with confidence stored, and the personal-scan test proves Gemini is never called
+- [ ] **T1.10** Chunking + persist + FTS + passage-diff for versions — `LIB-03`, `LIB-10` · T1.07 · **done when** chunk boundaries respect locations and LaTeX blocks (unit tests) and the diff flags modified/removed passages
+- [ ] **T1.11** Embedding step + Vectorize upsert with metadata, plus quota sleep — `LIB-07` · T1.10 · **done when** the fixture library is searchable by vector on preview
+- [ ] **T1.12** Library UI: list and tree, filters, status steps, privacy badge and toggle (re-syncs passage privacy and vector metadata) — `LIB-01/05`, `PRV-01` · T1.06 · **done when** changing the privacy flag updates D1 and Vectorize metadata (integration test)
+- [ ] **T1.13** Source reader: pdf.js viewer, page thumbnails, citation deep links with highlight, slide and Markdown views, studied tracking — `LIB-06/09` · T1.07 · **done when** `/source/:id?page=…&passage=…` scrolls and highlights correctly
+- [ ] **T1.14** Hybrid search: FTS + vector + RRF + rerank, search UI with filters — `LIB-07` · T1.11 · **done when** the retrieval eval (TESTING §4.2) meets recall@8 ≥ 0.85 on golden questions
+- [ ] **T1.15** Citation verifier module (normalise, exact, fuzzy, minimum length) — `AST-02` · T0.03 · **done when** the unit test table in TESTING §4.1 passes
+- [ ] **T1.16** Chat backend: retrieval, coverage threshold, prompt `chat@1`, sentence-buffered SSE stream with verification, segment persistence, mixed-privacy routing and disclosure — `AST-01..05`, `PRV-03` · T1.14, T1.15, T0.14 · **done when** streaming works on preview and the privacy disclosure is correct for each route
+- [ ] **T1.17** Assistant UI: conversations, scope chips, TrustBlock rendering, citation chip + preview popover, not-found actions, tutor toggle, KaTeX/MathML, live-region announcements — `AST-03..08`, `UX-04` · T1.16 · **done when** axe passes and a screen-reader pass reads citations and segment labels correctly
+- [ ] **T1.18** Cards data + manual editors for Basic, Cloze (math-aware) and Worked problem — `CRD-01/02/03` · T1.02 · **done when** all 3 types are created, edited, previewed and linked to passages
+- [ ] **T1.19** Review session: queue with interleaving, ts-fsrs scheduling, rating bar with intervals, undo, optimistic POST with `client_id` idempotency, server recompute — `CRD-05/08/09` · T1.18, T0.08 · **done when** the server and client states match after 200 reviews in the e2e test and a duplicate POST is ignored
+- [ ] **T1.20** Daily budget + new-card cap + backlog mode — `CRD-06` · T1.19 · **done when** the budget formula unit tests (AI_SYSTEM §9) pass and Today shows the estimated minutes
+- [ ] **T1.21** Card generation pipeline: `gen_cards@1`, mechanical checks, validator `validate@1` on a different model, dedupe, review tray — `CRD-04`, `AST-09` · T1.15, T0.14 · **done when** the generation eval meets ≥ 95% correct on the labelled sample and rejected items show their reasons
+- [ ] **T1.22** Source-change flags UI: diff view, keep/edit/regenerate/retire — `SRC-01/02` · T1.10, T1.18 · **done when** re-uploading a modified fixture flags exactly the affected cards
+- [ ] **T1.23** Notes editor: Markdown + KaTeX, passage links, idle-versioning — `LIB-08` · T1.10 · **done when** a note is searchable and citable after 2 minutes idle
+- [ ] **T1.24** Today screen: due/minutes, start review, open flags, ingesting sources, recent conversations. Plus the **first-run onboarding** shown while there are no courses — PRD §6, `LIB-12`, DESIGN §6 · T1.19, T1.22 · **done when** every tile links to its action, and a fresh account lands on onboarding with zero courses
+- [ ] **T1.24b** Course archiving: archive and unarchive a finished semester's courses. Archived courses are hidden from the sidebar, Today and review queues by default, but stay searchable — `LIB-01`, `LIB-12` · T1.02 · **done when** archiving removes a course's cards from today's queue and unarchiving restores them
+- [ ] **T1.25** Settings → Study, Assistant, AI & privacy (routing table, provider terms, usage vs free limits), Data (export/restore UI, backups list) — `UX-06`, `PRV-04`, `EXP-01` · T0.20, T0.15 · **done when** all settings persist and the usage meters show real counts
+- [ ] **T1.26** Golden eval set v1 from the Spring 2027 materials Alex has uploaded himself (kept **outside the public repo**, TESTING §4) + `ai-eval` workflow — `NFR-ACC` · T1.16, T1.21 · **done when** the eval report is generated and the targets are recorded
+- [ ] **T1.27** P1 hardening: performance budget check, full axe sweep in 6 style/theme combinations, NVDA pass, restore drill — `NFR-PERF`, `UX-02` · all P1 · **done when** the P1 exit criteria are met
+
+---
+
+## P2 — Grow & test (epics)
+- [ ] **E2.1 SPIKE P2-MATH**: Compute Engine parsing on calculus-style answers (synthetic cases), numeric identity test, does it run in Workers (AI_SYSTEM §7.2)
+- [ ] **E2.2 Lookup**: Tavily client, `trustedDomains.ts`, post-filter + redirect re-check, keep flow, primers (`LKP-*`)
+- [ ] **E2.2b Add course by code**: catalog lookup on the school's domain, extraction + verbatim checks, fallbacks, topic suggestions, `catalog_courses` cache, plus the catalog eval (30 codes, at least 5 schools) (`INS-03..06`, AI_SYSTEM §13b)
+- [ ] **E2.3 Questions**: generation + validation for all 4 formats, distractor checks (`QZ-01/03`)
+- [ ] **E2.4 Quiz builder and runner**: config, deterministic grading, numeric with units, symbolic, AI rubric with override (`QZ-02/04/05/06`)
+- [ ] **E2.5 Mastery**: Elo updates from attempts and reviews, variance band, "not enough data", adaptive selection, history snapshots (`ADP-*`)
+- [ ] **E2.6 Image occlusion**: editor with keyboard alternative, mask variants as card states (`CRD-01`)
+- [ ] **E2.7 Ramp-up warning**: deadline-aware capacity simulation (`CRD-07`). This needs a minimal deadlines entry, pulled forward from P3
+- [ ] **E2.8 Elo re-fit** on real data. Update the AI_SYSTEM §10 constants
+
+## P3 — Plan & analyse (epics)
+- [ ] **E3.1 Practice exams + weak-area analysis** (`EXM-*`)
+- [ ] **E3.2 Planner**: deadlines, ICS import (idempotent by UID), goals, weekly recommendations with reasons (`PLN-01..03`)
+- [ ] **E3.3 Study sessions + focus mode + Pomodoro** (`PLN-04`)
+- [ ] **E3.4 Analytics dashboard**: every panel with an action, calculation details (`ANL-*`), charts per DESIGN §2.5
+- [ ] **E3.5 Text-to-speech** (`UX-05`)
+
+## P4 — Portability & polish (epics)
+- [ ] **E4.1 Markdown export to an Obsidian folder structure** (`EXP-03`)
+- [ ] **E4.2 Anki `.apkg` export** (`EXP-04`)
+- [ ] **E4.3 FSRS optimisation round-trip**: CSV export, Python optimizer, hold-out comparison, adopt (`CRD-10`)
+- [ ] **E4.4 Claude provider** behind the gateway, plus an eval comparison (`NFR-PORT`)
+- [ ] **E4.5 Full performance and accessibility audit**
