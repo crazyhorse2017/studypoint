@@ -51,7 +51,7 @@ async function seal(id: string, title: string, doc: JsonDoc) {
   };
 }
 
-export async function createNote(courseId: string | null): Promise<string> {
+export async function createNote(courseId: string): Promise<string> {
   const id = uuid7();
   await api('POST', '/api/notes', { id, courseId, ...(await seal(id, '', EMPTY_DOC)) });
   return id;
@@ -67,7 +67,7 @@ export async function loadNote(id: string): Promise<OpenNote> {
 }
 
 /** Saves a new version; returns the server's new updatedAt (pass it back next time). */
-export async function saveNote(id: string, input: { title: string; doc: JsonDoc; courseId: string | null }, baseUpdatedAt: number): Promise<number> {
+export async function saveNote(id: string, input: { title: string; doc: JsonDoc; courseId: string }, baseUpdatedAt: number): Promise<number> {
   const { note } = await api<{ note: ServerSummary }>('PUT', `/api/notes/${encodeURIComponent(id)}`, {
     ...(await seal(id, input.title, input.doc)),
     courseId: input.courseId,

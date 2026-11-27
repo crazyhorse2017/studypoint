@@ -109,7 +109,10 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
 - **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
-  - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links), and typing `$…$` renders math inline. The toolbar adds inline math or a display equation; clicking any math edits it with a live preview.
+  - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links).
+  - **Math works like Word / Google Docs** (Alex's own LaTeX reference): type a command such as `\alpha`, `\frac{a}{b}` or `\sum_{i=1}^{n}` and press space to turn it into rendered math. There are no `$` delimiters, and unknown commands stay as plain text.
+  - **Alt+=** or the single **∑ Math** button opens the math box. It has a live preview, a choice of "in the sentence" or "on its own line", and a symbol palette grouped like Alex's reference. Clicking any math edits it with a live preview.
+  - **Every note belongs to a course** *(2026-11-26)*. New note uses the course being shown, or asks which one, and the server refuses a note without one. A note whose course was deleted shows as "Needs a course" and is read-only until it gets a new one.
   - **Storage:** the title and body are **encrypted in the browser** (`AUTH-08`). The body is the editor's own JSON document, which is lossless with math included. Markdown is generated from it in the browser for export (`EXP-03`) and for the AI, because the server only has ciphertext. Saved automatically about a second after typing stops. A save from an out-of-date tab is refused, not merged.
 - **LIB-09 MUST** — Studied-tracking per source, at the level of pages or sections: unread, read, or reviewed. It is updated automatically by reading and review, and can be overridden by hand.
 - **LIB-10 MUST** — Re-importing or editing a source creates a new **version**.

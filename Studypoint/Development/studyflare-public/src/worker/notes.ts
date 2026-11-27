@@ -33,8 +33,9 @@ function checkSealed(title: unknown, body: unknown): { title: string; body: stri
   return { title: title as string, body: body as string };
 }
 
-async function checkCourse(db: D1Database, userId: string, courseId: unknown): Promise<string | null> {
-  if (courseId === null || courseId === undefined) return null;
+/** Every note belongs to one of the user's courses (LIB-08, 2026-11-26): no course, no note. */
+async function checkCourse(db: D1Database, userId: string, courseId: unknown): Promise<string> {
+  if (courseId === null || courseId === undefined || courseId === '') throw new NoteError(400, 'Choose a course for this note first.');
   if (typeof courseId !== 'string') throw new NoteError(400, 'Invalid course.');
   const ok = await db.prepare('SELECT id FROM courses WHERE id = ? AND user_id = ?').bind(courseId, userId).first();
   if (!ok) throw new NoteError(404, "That course doesn't exist.");
@@ -82,7 +83,8 @@ export async function updateNote(db: D1Database, userId: string, id: string, inp
   const current = await getNote(db, userId, id);
   if (!current) throw new NoteError(404, "That note doesn't exist.");
   if (b['baseUpdatedAt'] !== current.updatedAt) throw new NoteError(409, 'This note was changed in another tab or device. Reload it to see the latest version.');
-  const courseId = 'courseId' in b ? await checkCourse(db, userId, b['courseId']) : current.courseId;
+  // A note from before courses were required must be given one before it can be saved again.
+  const courseId = await checkCourse(db, userId, 'courseId' in b ? b['courseId'] : current.courseId);
   const stamp = Math.max(now, current.updatedAt + 1);
   await db.batch([
     db.prepare('UPDATE sources SET title = ?, course_id = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(sealed.title, courseId, stamp, id, userId),

@@ -1,18 +1,22 @@
 // The note editor (LIB-08): rich text with a toolbar, and math rendered by KaTeX (MathML included for
-// screen readers). Type $x^2$ for inline math, or use the toolbar. Saves automatically, encrypted, about a
-// second after you stop typing. Loaded lazily, so the editor code only downloads when a note is opened.
+// screen readers). Math works like Word / Google Docs: type a LaTeX command such as \alpha or \frac{a}{b}
+// and press space, or press Alt+= (or ∑ Math) for the math box with its symbol palette. Saves
+// automatically, encrypted, about a second after you stop typing. Loaded lazily, so the editor code only
+// downloads when a note is opened.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { nodeInputRule } from '@tiptap/core';
+import { Extension, InputRule } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
 import { Placeholder } from '@tiptap/extensions';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Button, Dialog, Select, TextArea, useToast } from '../ds/index.ts';
+import { Button, Dialog, SegmentedControl, Select, TextArea, useToast } from '../ds/index.ts';
 import { navigate } from '../router.ts';
 import { useStudy } from '../studyStore.ts';
+import { TRAILING_COMMAND } from '../../shared/latexInput.ts';
+import { LATEX_GROUPS } from './latexReference.ts';
 import { deleteNote, loadNote, restoreNote, saveNote, type JsonDoc, type OpenNote } from './notesApi.ts';
 
 const KATEX = { throwOnError: false, output: 'htmlAndMathml' as const, trust: false };
@@ -29,14 +33,32 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
 
 type MathEdit = { kind: 'inline' | 'block'; latex: string; pos: number | null };
 
-/** Inline math from "$…$" as you type (not "$$", and not an escaped "\$"). */
-const DollarInlineMath = InlineMath.extend({
+/** True when KaTeX knows every command in `latex` (so a typo like "\alpah" stays plain text). */
+function isRealLatex(latex: string): boolean {
+  try {
+    katex.renderToString(latex, { throwOnError: true, trust: false });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Word / Google Docs-style math (Alex's LaTeX reference): type "\alpha" or "\frac{a}{b}" and press space,
+ * and it becomes rendered math. No $ delimiters. Replaces the extension's own input rules.
+ */
+const CommandInlineMath = InlineMath.extend({
   addInputRules() {
+    const type = this.type;
     return [
-      nodeInputRule({
-        find: /(?<![$\\])\$[^$\n]+\$$/,
-        type: this.type,
-        getAttributes: (match) => ({ latex: match[0].slice(1, -1) }),
+      new InputRule({
+        find: TRAILING_COMMAND,
+        handler: ({ state, range, match }) => {
+          const latex = match[2];
+          if (!latex || !isRealLatex(latex)) return null;
+          const start = range.from + (match[1]?.length ?? 0);
+          state.tr.replaceWith(start, range.to, type.create({ latex })).insertText(' ', start + 1);
+        },
       }),
     ];
   },
@@ -51,7 +73,7 @@ function MathPreview({ latex, block }: { latex: string; block: boolean }) {
   );
 }
 
-function Toolbar({ editor, onMath }: { editor: Editor; onMath: (kind: 'inline' | 'block') => void }) {
+function Toolbar({ editor, onMath }: { editor: Editor; onMath: () => void }) {
   const s = useEditorState({
     editor,
     selector: (ctx) => ({
@@ -92,8 +114,7 @@ function Toolbar({ editor, onMath }: { editor: Editor; onMath: (kind: 'inline' |
       {btn('Numbered list', '1. List', s.ordered, () => chain().toggleOrderedList().run())}
       {btn('Quote', '“ Quote', s.quote, () => chain().toggleBlockquote().run())}
       {btn('Inline code', '</>', s.code, () => chain().toggleCode().run())}
-      {btn('Inline math', '∑ Math', null, () => onMath('inline'))}
-      {btn('Equation on its own line', '∑ Equation', null, () => onMath('block'))}
+      {btn('Math (Alt+=)', '∑ Math', null, onMath)}
       {btn('Undo (Ctrl+Z)', 'Undo', null, () => chain().undo().run(), !s.canUndo)}
       {btn('Redo (Ctrl+Shift+Z)', 'Redo', null, () => chain().redo().run(), !s.canRedo)}
     </div>
@@ -113,10 +134,13 @@ function Loaded({ note }: { note: OpenNote }) {
   const again = useRef(false);
   const latest = useRef({ title: note.title, courseId: note.courseId });
   const editorRef = useRef<Editor | null>(null);
+  const openMathRef = useRef<() => void>(() => undefined);
+  openMathRef.current = () => setMath({ kind: 'inline', latex: '', pos: null });
 
   const save = useCallback(async () => {
     const ed = editorRef.current;
-    if (!ed) return;
+    const course = latest.current.courseId;
+    if (!ed || !course) return; // every note needs a course before it can be saved
     if (saving.current) {
       again.current = true;
       return;
@@ -124,7 +148,7 @@ function Loaded({ note }: { note: OpenNote }) {
     saving.current = true;
     setStatus('saving');
     try {
-      base.current = await saveNote(note.id, { title: latest.current.title.trim(), courseId: latest.current.courseId, doc: ed.getJSON() as JsonDoc }, base.current);
+      base.current = await saveNote(note.id, { title: latest.current.title.trim(), courseId: course, doc: ed.getJSON() as JsonDoc }, base.current);
       setStatus('saved');
     } catch (e) {
       const conflict = e instanceof Error && 'status' in e && (e as { status: number }).status === 409;
@@ -148,11 +172,23 @@ function Loaded({ note }: { note: OpenNote }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] }, link: { openOnClick: false, autolink: true } }),
-      DollarInlineMath.configure({ katexOptions: KATEX, onClick: (node, pos) => setMath({ kind: 'inline', latex: String(node.attrs['latex'] ?? ''), pos }) }),
+      // Alt+= opens the math box, the same shortcut as Word's "insert equation".
+      Extension.create({
+        name: 'mathShortcut',
+        addKeyboardShortcuts: () => ({
+          'Alt-=': () => {
+            openMathRef.current();
+            return true;
+          },
+        }),
+      }),
+      CommandInlineMath.configure({ katexOptions: KATEX, onClick: (node, pos) => setMath({ kind: 'inline', latex: String(node.attrs['latex'] ?? ''), pos }) }),
       BlockMath.configure({ katexOptions: { ...KATEX, displayMode: true }, onClick: (node, pos) => setMath({ kind: 'block', latex: String(node.attrs['latex'] ?? ''), pos }) }),
-      Placeholder.configure({ placeholder: 'Start writing. Type $x^2$ for math.' }),
+      Placeholder.configure({ placeholder: 'Start writing. For math, type a command like \\alpha or \\frac{a}{b} and press space, or press Alt+=.' }),
     ],
     content: note.doc,
+    // A note without a course (from before courses were required) is read-only until one is chosen.
+    editable: note.courseId !== null,
     editorProps: { attributes: { class: 'note-body reading','aria-label': 'Note text', 'aria-multiline': 'true' } },
     onUpdate: () => schedule(),
   });
@@ -202,7 +238,7 @@ function Loaded({ note }: { note: OpenNote }) {
     }
   };
 
-  const courseOptions = [{ value: 'none', label: 'No course' }, ...courses.filter((c) => !c.archived || c.id === courseId).map((c) => ({ value: c.id, label: c.code ? `${c.code} · ${c.name}` : c.name }))];
+  const courseOptions = courses.filter((c) => !c.archived || c.id === courseId).map((c) => ({ value: c.id, label: c.code ? `${c.code} · ${c.name}` : c.name }));
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -226,6 +262,7 @@ function Loaded({ note }: { note: OpenNote }) {
         placeholder="Untitled note"
         value={title}
         maxLength={200}
+        disabled={!courseId}
         onChange={(e) => {
           setTitle(e.target.value);
           latest.current.title = e.target.value;
@@ -236,12 +273,13 @@ function Loaded({ note }: { note: OpenNote }) {
         <div className="min-w-64">
           <Select
             label="Course"
-            value={courseId ?? 'none'}
+            value={courseId}
+            placeholder="Choose a course"
             options={courseOptions}
             onChange={(v) => {
-              const next = v === 'none' ? null : v;
-              setCourseId(next);
-              latest.current.courseId = next;
+              setCourseId(v);
+              latest.current.courseId = v;
+              editor?.setEditable(true);
               schedule();
             }}
           />
@@ -250,13 +288,19 @@ function Loaded({ note }: { note: OpenNote }) {
           Delete note
         </Button>
       </div>
-      {editor ? <Toolbar editor={editor} onMath={(kind) => setMath({ kind, latex: '', pos: null })} /> : null}
+      {!courseId ? (
+        <p role="note" className="rounded-lg border border-border-strong bg-sunken p-3 text-sm text-text">
+          Every note belongs to a course. Choose one above to keep editing this note.
+        </p>
+      ) : null}
+      {editor && courseId ? <Toolbar editor={editor} onMath={() => setMath({ kind: 'inline', latex: '', pos: null })} /> : null}
       <EditorContent editor={editor} className="min-h-[50vh] text-text" />
       <Dialog
         open={math !== null}
         onClose={() => setMath(null)}
-        title={math?.kind === 'block' ? 'Equation' : 'Inline math'}
-        description="Write LaTeX, for example \frac{dy}{dx} = 3x^2. Leave it empty to remove the math."
+        title={math?.pos === null ? 'Add math' : 'Edit math'}
+        description="Type LaTeX commands, e.g. \frac{dy}{dx} = 3x^2, or pick symbols below. Leave it empty to remove the math."
+        size="lg"
         actions={
           <>
             <Button variant="ghost" onClick={() => setMath(null)}>
@@ -270,8 +314,40 @@ function Loaded({ note }: { note: OpenNote }) {
       >
         {math ? (
           <div className="flex flex-col gap-3">
+            {math.pos === null ? (
+              <SegmentedControl
+                label="Place it"
+                value={math.kind}
+                options={[
+                  { value: 'inline', label: 'In the sentence' },
+                  { value: 'block', label: 'On its own line' },
+                ]}
+                onChange={(kind) => setMath({ ...math, kind })}
+              />
+            ) : null}
             <TextArea label="LaTeX" value={math.latex} onChange={(e) => setMath({ ...math, latex: e.target.value })} className="font-mono" autoFocus />
             <MathPreview latex={math.latex} block={math.kind === 'block'} />
+            <div className="flex max-h-64 flex-col gap-3 overflow-y-auto rounded-md border border-border p-3">
+              {LATEX_GROUPS.map((group) => (
+                <div key={group.title} role="group" aria-label={group.title} className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text-2">{group.title}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {group.items.map((item) => (
+                      <Button
+                        key={item.insert}
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`${item.name}: ${item.insert}`}
+                        title={item.insert}
+                        onClick={() => setMath({ ...math, latex: math.latex === '' ? item.insert : `${math.latex} ${item.insert}` })}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </Dialog>

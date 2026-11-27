@@ -15,7 +15,7 @@ type Src = { id: string; user_id: string; course_id: string | null; title: strin
 function fakeDb() {
   const sources = new Map<string, Src>();
   const bodies = new Map<string, string>();
-  const courses = new Set(['u1:course-1']);
+  const courses = new Set(['u1:course-1', 'u2:course-2']);
   const stmt = (sql: string, a: unknown[] = []) => ({
     bind: (...args: unknown[]) => stmt(sql, args),
     sql,
@@ -95,6 +95,22 @@ export function register(test: TestFn, assert: Assert): void {
     assert.equal(sources.size, 0);
   });
 
+  test('notes: a course is required to create or save a note', async () => {
+    const { db, sources } = fakeDb();
+    const id = uuid7();
+    const s = await sealed(id, 't', 'b');
+    assert.equal(await status(createNote(db, 'u1', { id, title: s.title, body: s.body })), 400);
+    assert.equal(await status(createNote(db, 'u1', { id, courseId: null, title: s.title, body: s.body })), 400);
+    assert.equal(sources.size, 0);
+    await createNote(db, 'u1', { id, courseId: 'course-1', title: s.title, body: s.body }, 100);
+    assert.equal(await status(updateNote(db, 'u1', id, { title: s.title, body: s.body, courseId: null, baseUpdatedAt: 100 })), 400, "can't be moved out of every course");
+    // A note saved before courses were required (course_id NULL) can only be saved once it gets a course.
+    (sources.get(id) as Src).course_id = null;
+    assert.equal(await status(updateNote(db, 'u1', id, { title: s.title, body: s.body, baseUpdatedAt: 100 })), 400);
+    const fixed = await updateNote(db, 'u1', id, { title: s.title, body: s.body, courseId: 'course-1', baseUpdatedAt: 100 });
+    assert.equal(fixed.courseId, 'course-1');
+  });
+
   test('notes: create, list and open round-trip the ciphertext; decrypting gives the text back', async () => {
     const { db, bodies } = fakeDb();
     const id = uuid7();
@@ -114,12 +130,12 @@ export function register(test: TestFn, assert: Assert): void {
     const { db } = fakeDb();
     const id = uuid7();
     const s = await sealed(id, 't', 'b');
-    await createNote(db, 'u1', { id, title: s.title, body: s.body }, 100);
+    await createNote(db, 'u1', { id, courseId: 'course-1', title: s.title, body: s.body }, 100);
     assert.equal((await listNotes(db, 'u2')).length, 0);
     assert.equal(await getNote(db, 'u2', id), null);
-    assert.equal(await status(updateNote(db, 'u2', id, { title: s.title, body: s.body, baseUpdatedAt: 100 })), 404);
+    assert.equal(await status(updateNote(db, 'u2', id, { title: s.title, body: s.body, courseId: 'course-2', baseUpdatedAt: 100 })), 404);
     assert.ok(!(await deleteNote(db, 'u2', id)));
-    assert.equal(await status(createNote(db, 'u2', { id, title: s.title, body: s.body })), 409, 'ids are global');
+    assert.equal(await status(createNote(db, 'u2', { id, courseId: 'course-2', title: s.title, body: s.body })), 409, 'ids are global');
     assert.equal(await status(createNote(db, 'u1', { id: uuid7(), courseId: 'course-of-u2', title: s.title, body: s.body })), 404, "can't file into someone else's course");
   });
 
@@ -127,7 +143,7 @@ export function register(test: TestFn, assert: Assert): void {
     const { db } = fakeDb();
     const id = uuid7();
     const s = await sealed(id, 't', 'b');
-    await createNote(db, 'u1', { id, title: s.title, body: s.body }, 100);
+    await createNote(db, 'u1', { id, courseId: 'course-1', title: s.title, body: s.body }, 100);
     const saved = await updateNote(db, 'u1', id, { title: s.title, body: s.body, baseUpdatedAt: 100 }, 100);
     assert.ok(saved.updatedAt > 100, 'strictly increases even within the same millisecond');
     assert.equal(await status(updateNote(db, 'u1', id, { title: s.title, body: s.body, baseUpdatedAt: 100 }, 200)), 409);
@@ -138,7 +154,7 @@ export function register(test: TestFn, assert: Assert): void {
     const { db } = fakeDb();
     const id = uuid7();
     const s = await sealed(id, 't', 'b');
-    await createNote(db, 'u1', { id, title: s.title, body: s.body }, 100);
+    await createNote(db, 'u1', { id, courseId: 'course-1', title: s.title, body: s.body }, 100);
     assert.ok(await deleteNote(db, 'u1', id));
     assert.equal((await listNotes(db, 'u1')).length, 0);
     assert.equal(await getNote(db, 'u1', id), null);
