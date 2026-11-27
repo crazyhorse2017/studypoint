@@ -14,6 +14,17 @@ import { PeopleError, addPerson, hasStoredToken, isInvited, isOwner, listPeople,
 import { parseAllowedEmails } from './auth/policy.ts';
 import { effectiveEnv, isPlaceholder, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
 import { SetupError, runSetup } from './setup/cloudflare.ts';
+import { VaultError, addPasskey, createVaultRow, getVault, markPasskeyUsed, removePasskey, updateVaultRow } from './vault.ts';
+
+/** Runs a vault operation, turning VaultError into its HTTP answer. */
+async function vaultCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof VaultError) return apiError(err.status, 'vault_error', err.message);
+    throw err;
+  }
+}
 
 /** An optional one-time Cloudflare token sent with a People change (never stored). */
 function tokenFrom(body: unknown): string | undefined {
@@ -124,6 +135,88 @@ export const ROUTES: readonly Route[] = [
         if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
         throw err;
       }
+    },
+  },
+  {
+    // AUTH-08: the encryption vault (wrapped keys only; the Worker can't unlock anything).
+    method: 'GET',
+    path: '/api/vault',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json(await getVault(env.DB, userId));
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/vault',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That request couldn't be read.");
+      }
+      const db = env.DB;
+      return vaultCall(async () => {
+        await createVaultRow(db, userId, body);
+        return json(await getVault(db, userId), 201);
+      });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/vault',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That request couldn't be read.");
+      }
+      const db = env.DB;
+      return vaultCall(async () => {
+        await updateVaultRow(db, userId, body);
+        return json(await getVault(db, userId));
+      });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/vault/passkeys',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That request couldn't be read.");
+      }
+      const db = env.DB;
+      return vaultCall(async () => {
+        await addPasskey(db, userId, body);
+        return json(await getVault(db, userId), 201);
+      });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/vault/passkeys/:id/used',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      await markPasskeyUsed(env.DB, userId, params['id'] ?? '');
+      return json({ ok: true });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/vault/passkeys/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await removePasskey(env.DB, userId, params['id'] ?? ''))
+        ? json(await getVault(env.DB, userId))
+        : apiError(404, 'not_found', "That passkey isn't on this account.");
     },
   },
   {

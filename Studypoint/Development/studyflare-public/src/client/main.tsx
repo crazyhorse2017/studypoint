@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { api } from './api.ts';
 import { SetupPage, type SetupStatus } from './pages/SetupPage.tsx';
+import { VaultGate } from './pages/VaultPages.tsx';
+import { ToastProvider } from './ds/index.ts';
 import { initSettings } from './settingsStore.ts';
 import { loadStudy } from './studyStore.ts';
 import './styles.css';
@@ -25,7 +27,15 @@ function Root() {
     if (setup === null) void loadStudy();
   }, [setup]);
   if (setup === 'checking') return null;
-  return setup ? <SetupPage status={setup} /> : <App />;
+  if (setup) return <SetupPage status={setup} />;
+  // AUTH-08: nothing behind the lock renders until the vault is unlocked.
+  return (
+    <ToastProvider>
+      <VaultGate>
+        <App />
+      </VaultGate>
+    </ToastProvider>
+  );
 }
 
 const rootElement = document.getElementById('root');

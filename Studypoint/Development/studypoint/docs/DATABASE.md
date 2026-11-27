@@ -549,6 +549,34 @@ CREATE TABLE app_config (
   value TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+-- Added in migration 0004 (2026-11-26): the encryption vault (AUTH-08, ARCHITECTURE A20).
+-- Only WRAPPED keys and a key-check ciphertext are stored, so the server can't decrypt anything.
+-- Both tables ARE exported: an export is useless without the wrapped key, and the export still needs
+-- the passphrase or recovery code to read.
+CREATE TABLE vault (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version = 1),
+  kdf TEXT NOT NULL CHECK (kdf IN ('pbkdf2-sha256')),
+  pass_iterations INTEGER NOT NULL CHECK (pass_iterations >= 100000),
+  pass_salt TEXT NOT NULL,
+  pass_wrapped TEXT NOT NULL,
+  recovery_iterations INTEGER NOT NULL CHECK (recovery_iterations >= 100000),
+  recovery_salt TEXT NOT NULL,
+  recovery_wrapped TEXT NOT NULL,
+  key_check TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE vault_passkeys (
+  credential_id TEXT PRIMARY KEY,           -- base64url WebAuthn credential id
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  prf_salt TEXT NOT NULL,
+  wrapped TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
 ```
 
 ## 4. Key queries

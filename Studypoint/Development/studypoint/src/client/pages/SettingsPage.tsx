@@ -9,6 +9,7 @@ import { updateSettings, useSettings, type SaveState } from '../settingsStore.ts
 import { StylePicker } from './StylePicker.tsx';
 import { SchoolPicker } from './SchoolPicker.tsx';
 import { PeopleSection } from './PeopleSection.tsx';
+import { SecuritySection } from './SecuritySection.tsx';
 import { useStudy } from '../studyStore.ts';
 
 const FONT_OPTIONS: ReadonlyArray<{ value: ReadingFont; label: string }> = [
@@ -155,6 +156,8 @@ export function SettingsPage() {
         )}
         <p className="text-sm text-text-2">New courses use this school. Courses you already added keep theirs.</p>
       </section>
+
+      <SecuritySection email={email} />
 
       {isOwner ? <PeopleSection /> : null}
 

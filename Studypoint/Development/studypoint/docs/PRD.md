@@ -58,8 +58,8 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 | Phase | Scope | Theme |
 |---|---|---|
 | **P0 Foundations** | Auth, design system core, schema, AI provider layer with privacy routing, CI/test harness | Nothing visible to study with yet |
-| **P1 Core study loop (v1)** | School picker + course codes (`INS-01/02`), Library + ingestion, search, grounded assistant, flashcards (Basic, Cloze, Worked-problem), FSRS review, source-change flags, accessibility baseline, JSON backup | **First usable release** |
-| **P2 Grow & test** | Lookup section, add-course-by-code catalog lookup (`INS-03..06`), quizzes (all four formats), Elo mastery, image occlusion, ramp-up warning (`CRD-07`) with a minimal deadline entry | |
+| **P1 Core study loop (v1)** | Passphrase lock + encryption (`AUTH-08`), school picker + course codes (`INS-01/02`), Library + ingestion, search, grounded assistant, flashcards (Basic, Cloze, Worked-problem, typed answer, image occlusion), FSRS review with exam cram mode (`CRD-07`), source-change flags, accessibility baseline, JSON backup. *(2026-11-26: Alex pulled image occlusion, typed answers and the exam mode forward from P2)* | **First usable release** |
+| **P2 Grow & test** | Lookup section, add-course-by-code catalog lookup (`INS-03..06`), quizzes (all four formats), Elo mastery | |
 | **P3 Plan & analyse** | Practice exams + weak-area analysis, planner (+ ICS import), study sessions + focus mode, analytics dashboard, text-to-speech | |
 | **P4 Portability & polish** | Markdown export to Obsidian, Anki export, scheduled backups UI, FSRS parameter optimisation, Claude provider option | |
 
@@ -90,6 +90,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   - **Personal content** (own notes, own uploads and their text, chats, cards and questions made from personal sources) is stored encrypted. Cloudflare only ever holds ciphertext. Published content (textbooks, lookups) stays unencrypted.
   - **AI while unlocked:** the browser decrypts and sends only the text a request needs. The Worker passes it to Workers AI (never Gemini, `PRV-02`) and stores nothing in plaintext. Nothing personal is processed while the user is away.
   - Search over personal content runs in the browser. Vectors for personal passages are never stored on the server.
+  - *(Alex's choices, 2026-11-26)* **Stays unlocked until the tab closes** (a reload in the same tab doesn't re-lock), and **locks after 30 minutes idle**. **Passkey unlock** where the browser supports it, with the passphrase and recovery code always working. **Only content is encrypted**: course names, the school, settings and deadlines stay readable, so the sidebar shows before unlocking.
   - A recovery code is shown once at setup. Losing both the passphrase and the code means the encrypted content can't be recovered, and the app says so plainly.
 - **AUTH-04 MUST** — Local dev bypass works only on localhost with an explicit dev variable. It is impossible in production.
 - **AUTH-05 MUST** — **Preview only:** a Cloudflare Access service token (`CI_SERVICE_TOKEN_ID`) maps to a dedicated CI test user for end-to-end tests, and `AI_FAKE=1` routes AI calls to recorded responses.
@@ -113,6 +114,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
 - **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
+  - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links), and typing `$…$` renders math inline. The note is still saved as Markdown, so exports stay clean.
 - **LIB-09 MUST** — Studied-tracking per source, at the level of pages or sections: unread, read, or reviewed. It is updated automatically by reading and review, and can be overridden by hand.
 - **LIB-10 MUST** — Re-importing or editing a source creates a new **version**.
   Cards and questions linked to changed or removed passages are flagged "source changed" (`SRC-01`).
@@ -173,12 +175,13 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 - **AST-08 MUST** — Conversations are saved and attached to a course or topic, and can be scoped to chosen sources.
 - **AST-09 SHOULD** — Turn an answer, or a passage of one, into flashcards in one click (this goes through `CRD-04` validation).
 
-### 6.5 Flashcards & review (`CRD`) — P1 (image occlusion P2)
+### 6.5 Flashcards & review (`CRD`) — P1
 - **CRD-01 MUST** — Card types:
   - **Basic** (optionally reversible)
+  - **Typed answer** *(P1, 2026-11-26)*: a Basic card where Alex types the answer before revealing it. Text is compared after normalisation, and numbers within a tolerance. It's stored as `type = 'basic'` with `data_json.answer_mode = 'typed'`, so no schema change is needed.
   - **Cloze** (one or more deletions, can include math)
   - **Worked-problem**: a problem with a step-by-step solution, where Alex works it, reveals the solution and rates themselves
-  - **Image occlusion** (P2). The schema supports it from P0.
+  - **Image occlusion** *(moved to P1, 2026-11-26)*: hide labels on a diagram, slide or page image. The schema supports it from P0.
 - **CRD-02 MUST** — Each card links to the passage(s) it came from, or is marked "manual" if Alex wrote it.
 - **CRD-03 MUST** — Cards can be created by hand or generated by AI from selected passages, pages or topics.
 - **CRD-04 MUST** — Generated cards are validated before being saved:
@@ -189,7 +192,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   Cards that fail are discarded or shown to Alex for a decision. They are never added silently.
 - **CRD-05 MUST** — Scheduling uses **FSRS** with a target retention set by Alex (default 0.90). The raw review log is always stored (`DATABASE`).
 - **CRD-06 MUST** — Daily load is set by a **minutes-per-day budget**. New-card introduction is capped so expected review time fits the budget.
-- **CRD-07 MUST (P2)** — Ramp-up warning before exams. It ships in P2 with a minimal deadline entry pulled forward from `PLN-01`. If an exam date (`PLN`) is set for a topic, warn when its unseen or unstable cards can't be covered by then at the current budget.
+- **CRD-07 MUST (moved to P1, 2026-11-26)** — **Exam cram mode** and a ramp-up warning. Each course can have an "exam on <date>" (a `deadlines` row of kind `exam`, a minimal entry pulled forward from `PLN-01`). Until that date, the course's cards are scheduled so each one is seen at least once more before the exam, and new cards are front-loaded. Defaults stay 20 new cards a day at 90% target retention. If an exam date (`PLN`) is set for a topic, warn when its unseen or unstable cards can't be covered by then at the current budget.
 - **CRD-08 MUST** — Reviews run fully by keyboard, with a 4-button rating (Again / Hard / Good / Easy) as in FSRS.
 - **CRD-09 SHOULD** — Review queues interleave topics within a course by default (`ADP-03`).
 - **CRD-10 MAY** — Optimise FSRS parameters from Alex's own history once there's enough data (P4; threshold to be decided in AI_SYSTEM).

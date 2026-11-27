@@ -18,6 +18,9 @@ const viaParent = (col: string, parent: string, parentScope = 'user_id = ?1') =>
 export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'users', scope: 'id = ?1' },
   { name: 'user_emails', scope: 'user_id = ?1' },
+  // AUTH-08: wrapped keys only. Needed to read the encrypted content in the same export.
+  { name: 'vault', scope: 'user_id = ?1' },
+  { name: 'vault_passkeys', scope: 'user_id = ?1' },
   { name: 'settings', scope: 'user_id = ?1' },
   { name: 'courses', scope: 'user_id = ?1' },
   { name: 'catalog_courses', scope: 'user_id = ?1' },
@@ -68,5 +71,5 @@ export const DEFERRED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
 
 /** Tables whose rows count as "content": restore refuses to run unless all of them are empty. */
 export const CONTENT_TABLES: readonly string[] = EXPORT_TABLES.map((t) => t.name).filter(
-  (n) => n !== 'users' && n !== 'user_emails' && n !== 'settings',
+  (n) => n !== 'users' && n !== 'user_emails' && n !== 'settings' && n !== 'vault' && n !== 'vault_passkeys',
 );
