@@ -9,7 +9,16 @@ const MATH_RUN = new RegExp(String.raw`${COMMAND}(?:\s*[=+\-*/<>,]?\s*${COMMAND}
 
 export type Segment = { math: false; text: string } | { math: true; latex: string };
 
-export function splitMath(text: string): Segment[] {
+/**
+ * AI models sometimes wrap math in \( … \) or \[ … \] despite being told not to. Those wrappers aren't part
+ * of Studyflare's Word-style convention, so they're dropped and the commands inside render as usual.
+ */
+export function dropMathWrappers(text: string): string {
+  return text.replace(/\\\(\s*|\s*\\\)|\\\[\s*|\s*\\\]/g, ' ').replace(/ {2,}/g, ' ');
+}
+
+export function splitMath(input: string): Segment[] {
+  const text = dropMathWrappers(input);
   const out: Segment[] = [];
   let last = 0;
   for (const m of text.matchAll(MATH_RUN)) {

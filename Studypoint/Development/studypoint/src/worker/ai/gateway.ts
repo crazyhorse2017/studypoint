@@ -69,6 +69,14 @@ function friendly(err: unknown): AiError {
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
+/**
+ * Reasoning models (gpt-oss) spend part of max_tokens "thinking" before answering; with too small a budget
+ * the answer comes back EMPTY (seen on production 2026-11-27). So: low effort for checking/grading, medium
+ * for answering/writing, and the token budget includes room for the reasoning.
+ */
+const EFFORT: Record<Exclude<AiTask, 'embed' | 'ocr'>, 'low' | 'medium'> = { answer: 'medium', generate: 'medium', validate: 'low', grade: 'low' };
+const REASONING_ROOM = 3000;
+
 /** One text completion. `json` asks for a JSON object (parsed and validated by the caller). */
 export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask, 'embed' | 'ocr'>, messages: ChatMessage[], opts: { maxTokens?: number; json?: boolean } = {}): Promise<string> {
   const model = modelFor(env, task);
@@ -76,7 +84,8 @@ export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask,
   try {
     res = await ai(env).run(model as keyof AiModels, {
       messages,
-      max_tokens: opts.maxTokens ?? 2048,
+      max_tokens: (opts.maxTokens ?? 2048) + REASONING_ROOM,
+      reasoning_effort: EFFORT[task],
       temperature: task === 'generate' ? 0.4 : 0.2,
       ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
     } as never);
@@ -85,7 +94,7 @@ export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask,
   }
   const text = textOf(res).trim();
   await recordUsage(env, userId, task, messages.reduce((n, m) => n + m.content.length, 0), text.length);
-  if (!text) throw new AiError(502, 'The AI returned an empty answer. Try again.');
+  if (!text) throw new AiError(502, 'The AI ran out of room before answering. Try a smaller selection.');
   return text;
 }
 

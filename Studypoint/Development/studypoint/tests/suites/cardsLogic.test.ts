@@ -64,6 +64,9 @@ export function register(test: TestFn, assert: Assert): void {
     const s = splitMath('Flux is \\frac{dQ}{dt} and \\alpha decays');
     assert.deepEqual(s.map((x) => (x.math ? `M:${x.latex}` : `T:${x.text}`)), ['T:Flux is ', 'M:\\frac{dQ}{dt}', 'T: and ', 'M:\\alpha', 'T: decays']);
     assert.deepEqual(splitMath('price $5 and x^2'), [{ math: false, text: 'price $5 and x^2' }]);
+    const wrapped = splitMath('heat flux \\( \\mathbf{q} = -k\\nabla T \\) here');
+    assert.ok(wrapped.every((x) => (x.math ? !x.latex.includes('\\(') : !x.text.includes('\\('))), 'AI \\( \\) wrappers are dropped');
+    assert.ok(wrapped.some((x) => x.math && x.latex.includes('\\mathbf{q}')));
     const run = splitMath('E = mc^{2} \\cdot \\gamma');
     assert.ok(run.some((x) => x.math && x.latex.includes('\\cdot') && x.latex.includes('\\gamma')), 'adjacent commands form one run');
   });
