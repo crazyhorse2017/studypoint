@@ -71,6 +71,17 @@ export function register(test: TestFn, assert: Assert): void {
     assert.ok(!validateCourse({}, home).ok);
     assert.ok(!validateCourse({ code: 'CHEM 101' }, null).ok, 'needs a school');
     assert.ok(!validateCourse({ title: 'x'.repeat(161) }, home).ok);
+    assert.ok(ok.ok && ok.value.kind === 'college', 'no kind means a college course (existing clients)');
+  });
+
+  test('courses (LIB-01b): personal subjects need only a name: no school, no code', () => {
+    const p = validateCourse({ kind: 'personal', title: '  Learning   Italian ' }, null);
+    assert.ok(p.ok, 'works without a home school');
+    assert.deepEqual(p.ok ? p.value : null, { kind: 'personal', code: null, subject: null, number: null, title: 'Learning Italian', school: null });
+    assert.ok(!validateCourse({ kind: 'personal', title: '' }, null).ok, 'a name is required');
+    assert.ok(!validateCourse({ kind: 'personal', title: 'Astronomy', code: 'ASTR 101' }, null).ok, 'codes are refused, not dropped');
+    assert.ok(!validateCourse({ kind: 'personal', title: 'x'.repeat(161) }, null).ok);
+    assert.ok(!validateCourse({ kind: 'hobby', title: 'Chess' }, null).ok, 'unknown kinds are refused');
   });
 
   test('schools: manual "Not listed" input is validated', () => {

@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { Button, ConfirmDialog, Menu, TextField, useToast } from '../ds/index.ts';
 import { removeCourse, renameCourse, setArchived, useStudy, type Course } from '../studyStore.ts';
 import { AddCourse } from './AddCourse.tsx';
-import { Link } from '../Link.tsx';
 import { NotesSection } from '../notes/NotesSection.tsx';
 
 function CourseRow({ c }: { c: Course }) {
@@ -42,7 +41,7 @@ function CourseRow({ c }: { c: Course }) {
             <span className="text-text">{c.name}</span>
             {c.archived ? <span className="rounded-sm bg-sunken px-1.5 text-xs text-text-2">Archived</span> : null}
           </span>
-          <span className="text-sm text-text-3">{c.school.name}</span>
+          <span className="text-sm text-text-3">{c.school ? c.school.name : 'Personal subject'}</span>
         </div>
       )}
       {!renaming ? (
@@ -96,14 +95,6 @@ export function LibraryPage() {
       </div>
       <NotesSection />
       {!loaded ? <p className="text-text-2">Loading…</p> : null}
-      {loaded && !school ? (
-        <p className="text-text-2">
-          <Link to="/" className="text-accent underline underline-offset-2">
-            Choose your school on Today
-          </Link>{' '}
-          to add courses.
-        </p>
-      ) : null}
       {active.length > 0 ? (
         <section aria-labelledby="courses-heading" className="rounded-lg border border-border bg-surface px-5">
           <h2 id="courses-heading" className="sr-only">
@@ -116,12 +107,12 @@ export function LibraryPage() {
           </ul>
         </section>
       ) : null}
-      {school ? (
+      {loaded ? (
         <section aria-labelledby="add-heading" className="flex flex-col gap-4">
           <h2 id="add-heading" className="text-xl font-semibold">
-            Add a course
+            Add a course or subject
           </h2>
-          <AddCourse />
+          <AddCourse key={school ? 'school' : 'none'} />
         </section>
       ) : null}
       {archived.length > 0 ? (

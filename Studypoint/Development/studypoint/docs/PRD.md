@@ -108,6 +108,7 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   Partial failures name the failing pages.
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
+- **LIB-01b MUST** *(added 2026-11-26)* — **Personal subjects.** Besides college courses, Alex can add a subject he's learning for its own sake (e.g. "Astronomy"). It has just a name, with no school and no course code, and works everywhere a course does: notes, uploads, cards and review. It doesn't need a home school to be chosen first. Stored as `courses.kind = 'personal'` (migration 0006).
 - **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
   - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links).
   - **Math works like Word / Google Docs** (Alex's own LaTeX reference): type a command such as `\alpha`, `\frac{a}{b}` or `\sum_{i=1}^{n}` and press space to turn it into rendered math. There are no `$` delimiters, and unknown commands stay as plain text.

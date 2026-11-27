@@ -338,7 +338,8 @@ def _():
     db.execute(upsert, ("u1", "163268", "Example University", "example.edu", 5))
     db.execute(upsert, ("u1", None, "Other College", None, 6))
     assert db.execute("SELECT home_unitid, home_institution_name FROM settings").fetchall() == [(None, "Other College")]
-    db.execute(insert, ("c1", "u1", "General Chemistry", "163268", "Example University", "example.edu", "CHEM", "101", "General Chemistry", 1, 1))
+    db.execute(insert, ("c1", "u1", "college", "General Chemistry", "163268", "Example University", "example.edu", "CHEM", "101", "General Chemistry", 1, 1))
+    db.execute(insert, ("c2", "u1", "personal", "Astronomy", None, "", None, None, None, None, 1, 1))  # LIB-01b
     assert db.execute(dup, ("u1", "CHEM", "101", "163268", "Example University")).fetchone() is not None
     assert db.execute(dup, ("u1", "CHEM", "101", None, "Another School")).fetchone() is None, "same code at another school is fine"
     db.execute("INSERT INTO topics (id, course_id, name, position, created_at) VALUES ('t1', 'c1', 'Topic', 0, 1)")
@@ -356,6 +357,16 @@ def _():
     db.execute(sql, ("u1", "midnight", "system", '{"sizePct":130}', 6))
     rows = db.execute("SELECT style, theme, reading_json, updated_at FROM settings").fetchall()
     assert rows == [("midnight", "system", '{"sizePct":130}', 6)], rows
+
+
+@check("courses: kind defaults to 'college', allows 'personal' with no school or code, rejects others (0006)")
+def _():
+    db = fresh_db()
+    db.execute("INSERT INTO users (id, email, created_at) VALUES ('u1', 'ci@studypoint.invalid', 1)")
+    db.execute("INSERT INTO courses (id, user_id, name, institution_name, created_at, updated_at) VALUES ('c1', 'u1', 'Old', 'School', 1, 1)")
+    assert db.execute("SELECT kind FROM courses WHERE id = 'c1'").fetchone() == ("college",)
+    db.execute("INSERT INTO courses (id, user_id, kind, name, institution_name, created_at, updated_at) VALUES ('c2', 'u1', 'personal', 'Astronomy', '', 1, 1)")
+    expect_error(db, "INSERT INTO courses (id, user_id, kind, name, institution_name, created_at, updated_at) VALUES ('c3', 'u1', 'hobby', 'x', '', 1, 1)", fragment="CHECK")
 
 
 @check("worker SQL compiles against the schema (notes, vault, courses, settings, setup)")

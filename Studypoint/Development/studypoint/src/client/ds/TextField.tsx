@@ -87,16 +87,24 @@ export function TextArea({ label, description, error, required, rows = 3, maxRow
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-size: reset then grow to fit, capped at maxRows.
+  // Auto-size: grow to fit, never smaller than `rows`, capped at maxRows. While the field is hidden
+  // (e.g. inside a dialog that hasn't opened yet) it has no layout and scrollHeight is 0, so measuring
+  // then would collapse it to a sliver; the min-height below keeps it at `rows` lines regardless.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = 'auto';
     const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
+    const min = line * rows + 16;
     const max = line * maxRows + 16;
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.minHeight = `${min}px`;
+    el.style.height = 'auto';
+    if (el.scrollHeight === 0) {
+      el.style.height = `${min}px`;
+      return;
+    }
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
     el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
-  }, [value, maxRows]);
+  }, [value, rows, maxRows]);
 
   return (
     <Chrome id={id} label={label} description={description} error={error} required={required}>

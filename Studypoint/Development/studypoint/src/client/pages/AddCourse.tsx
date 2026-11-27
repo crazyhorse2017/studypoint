@@ -2,35 +2,41 @@
 // The other ways to start a course say plainly what they're waiting for.
 
 import { useMemo, useState } from 'react';
-import { Button, TextField } from '../ds/index.ts';
+import { Button, SegmentedControl, TextField } from '../ds/index.ts';
 import { checkCourseCode, learnFormat } from '../../shared/courseCode.ts';
 import { addCourse, useStudy } from '../studyStore.ts';
+import { Link } from '../Link.tsx';
+
+type Kind = 'college' | 'personal';
 
 export function AddCourse({ onAdded }: { onAdded?: () => void }) {
   const { courses, school } = useStudy();
+  // Without a school yet, only personal subjects can be added, so start there.
+  const [kind, setKind] = useState<Kind>(school ? 'college' : 'personal');
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const format = useMemo(
-    () => learnFormat(courses.filter((c) => c.school.name === school?.name && c.code).map((c) => c.code as string)),
+    () => learnFormat(courses.filter((c) => c.school !== null && c.school.name === school?.name && c.code).map((c) => c.code as string)),
     [courses, school],
   );
-  const check = code.trim() ? checkCourseCode(code, format) : null;
+  const check = kind === 'college' && code.trim() ? checkCourseCode(code, format) : null;
   const codeError = check && !check.ok ? check.error : null;
   const codeHint = check && check.ok ? (check.warning ?? `Saved as ${check.code.normalised}`) : 'Letters, then a number, like SUBJ 101.';
 
   const submit = async () => {
     setError(null);
-    if (codeError) return;
-    if (!code.trim() && !title.trim()) {
-      setError('Enter a course code, a title, or both.');
-      return;
+    if (kind === 'personal') {
+      if (!title.trim()) return setError('Name the subject, like “Astronomy” or “Learning Italian”.');
+    } else {
+      if (codeError) return;
+      if (!code.trim() && !title.trim()) return setError('Enter a course code, a title, or both.');
     }
     setSaving(true);
     try {
-      await addCourse({ code, title });
+      await addCourse({ kind, code: kind === 'personal' ? '' : code, title });
       setCode('');
       setTitle('');
       onAdded?.();
@@ -50,18 +56,47 @@ export function AddCourse({ onAdded }: { onAdded?: () => void }) {
           void submit();
         }}
       >
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
-          <TextField label="Course code" value={code} onChange={(e) => setCode(e.target.value)} error={codeError} description={codeError ? undefined : codeHint} placeholder="SUBJ 101" autoCapitalize="characters" />
-          <TextField label="Course title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="As it appears in your catalog" />
-        </div>
+        <SegmentedControl
+          label="Type"
+          value={kind}
+          options={[
+            { value: 'college', label: 'College course' },
+            { value: 'personal', label: 'Personal subject' },
+          ]}
+          onChange={(k) => {
+            setKind(k);
+            setError(null);
+          }}
+        />
+        {kind === 'personal' ? (
+          <TextField
+            label="Subject name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Astronomy, Learning Italian, Guitar theory"
+            description="Something you’re learning for yourself. No school or course code needed."
+          />
+        ) : !school ? (
+          <p className="text-text-2">
+            <Link to="/" className="text-accent underline underline-offset-2">
+              Choose your school on Today
+            </Link>{' '}
+            to add college courses, or add a personal subject instead.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+            <TextField label="Course code" value={code} onChange={(e) => setCode(e.target.value)} error={codeError} description={codeError ? undefined : codeHint} placeholder="SUBJ 101" autoCapitalize="characters" />
+            <TextField label="Course title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="As it appears in your catalog" />
+          </div>
+        )}
         {error ? (
           <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         ) : null}
         <div>
-          <Button type="submit" variant="primary" loading={saving}>
-            Add course
+          <Button type="submit" variant="primary" loading={saving} disabled={kind === 'college' && !school}>
+            {kind === 'personal' ? 'Add subject' : 'Add course'}
           </Button>
         </div>
       </form>

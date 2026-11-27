@@ -69,18 +69,20 @@ export function TodayPage() {
                 <SchoolPicker onDone={() => setChangingSchool(false)} />
               )}
             </Step>
-            <Step n={2} title={active.length === 0 ? 'Add your first course' : 'Add another course'} done={active.length > 0}>
+            <Step n={2} title={active.length === 0 ? 'Add your first course or subject' : 'Add another course or subject'} done={active.length > 0}>
               {active.length > 0 ? (
                 <ul className="flex flex-col gap-1">
                   {active.map((c) => (
                     <li key={c.id} className="flex items-baseline gap-2">
                       {c.code ? <span className="font-mono text-sm text-text-2">{c.code}</span> : null}
                       <span className="text-text">{c.title ?? c.name}</span>
+                      {c.kind === 'personal' ? <span className="text-sm text-text-3">Personal</span> : null}
                     </li>
                   ))}
                 </ul>
               ) : null}
-              {school ? <AddCourse /> : <p className="text-sm text-text-2">Choose your school first, so course codes match its catalog.</p>}
+              {/* College courses need the school; personal subjects (LIB-01b) don't. */}
+              <AddCourse key={school ? 'school' : 'none'} />
             </Step>
             <Step n={3} title="Make it yours" done={false}>
               <p className="text-text-2">

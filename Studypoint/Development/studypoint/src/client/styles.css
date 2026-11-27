@@ -102,6 +102,36 @@
     }
   }
 
+  /* Scrollbars (2026-11-26): slim, rounded, themed from the tokens so they match every style in light and
+     dark. Chrome/Edge/Firefox use the standard properties; Safari uses the ::-webkit-scrollbar rules below. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 9999px;
+    border: 2px solid var(--page);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-3);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  @media (forced-colors: active) {
+    * {
+      scrollbar-color: auto;
+    }
+  }
+
   /* Reading text (DESIGN §2.6, UX-03). The user's font choice overrides the style's reading font. */
   .reading {
     font-family: var(--ff-reading-override, var(--ff-reading));

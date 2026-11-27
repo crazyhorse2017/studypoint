@@ -533,6 +533,10 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
+-- Migration 0006 (2026-11-26): personal courses (LIB-01b), a subject studied for its own sake with no school
+-- and no code. Personal rows keep institution_name = '' (it's NOT NULL) and NULL unitid/domain/code/title.
+-- ALTER TABLE courses ADD COLUMN kind TEXT NOT NULL DEFAULT 'college' CHECK (kind IN ('college','personal'));
+
 -- Migration 0002 added `allowed_emails` (Settings → People invites, AUTH-06). Migration 0005 dropped it
 -- (2026-11-26, ARCHITECTURE A21): each person now deploys their own Studyflare (AUTH-07).
 

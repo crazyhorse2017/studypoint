@@ -4,12 +4,17 @@ import { parseCourseCode } from './courseCode.ts';
 
 export type SchoolRef = { unitid: string | null; name: string; domain: string | null };
 
+/** 'college' courses belong to a school and may have a code; 'personal' ones are just a subject (LIB-01b). */
+export type CourseKind = 'college' | 'personal';
+
 export type CourseInput = {
+  kind: CourseKind;
   code: string | null; // normalised "SUBJ 123" or null
   subject: string | null;
   number: string | null;
   title: string;
-  school: SchoolRef;
+  /** Null for personal courses. */
+  school: SchoolRef | null;
 };
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -33,9 +38,20 @@ export function validateSchool(input: unknown): Validated<SchoolRef> {
   return { ok: true, value: { unitid: typeof unitid === 'string' ? unitid : null, name, domain } };
 }
 
-/** Validate a new course. The code is optional; a title or a code is required. */
+/**
+ * Validate a new course. College: needs a school; the code is optional; a title or a code is required.
+ * Personal: just a name. No school and no code (the code field is rejected, not silently dropped).
+ */
 export function validateCourse(input: unknown, homeSchool: SchoolRef | null): Validated<CourseInput> {
   const r = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>;
+  if (r['kind'] === 'personal') {
+    const name = typeof r['title'] === 'string' ? r['title'].trim().replace(/\s+/g, ' ') : '';
+    if (!name) return { ok: false, error: 'Name the subject, like “Astronomy” or “Learning Italian”.' };
+    if (name.length > 160) return { ok: false, error: 'Keep the name under 160 characters.' };
+    if (typeof r['code'] === 'string' && r['code'].trim() !== '') return { ok: false, error: 'Personal subjects don’t have course codes.' };
+    return { ok: true, value: { kind: 'personal', code: null, subject: null, number: null, title: name, school: null } };
+  }
+  if (r['kind'] !== undefined && r['kind'] !== 'college') return { ok: false, error: 'Unknown course type.' };
   const school = r['school'] === undefined ? homeSchool : validateSchool(r['school']).ok ? (validateSchool(r['school']) as { value: SchoolRef }).value : null;
   if (!school) return { ok: false, error: 'Choose your school first.' };
 
@@ -53,5 +69,5 @@ export function validateCourse(input: unknown, homeSchool: SchoolRef | null): Va
   const title = typeof r['title'] === 'string' ? r['title'].trim().replace(/\s+/g, ' ') : '';
   if (title.length > 160) return { ok: false, error: 'Keep the course title under 160 characters.' };
   if (!title && !code) return { ok: false, error: 'Enter a course code, a title, or both.' };
-  return { ok: true, value: { code, subject, number, title: title || (code as string), school } };
+  return { ok: true, value: { kind: 'college', code, subject, number, title: title || (code as string), school } };
 }

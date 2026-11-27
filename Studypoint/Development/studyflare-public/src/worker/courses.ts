@@ -1,10 +1,11 @@
 // Home school and courses (INS-01/02, LIB-01, LIB-12). Every query is scoped by user_id (AGENTS rule 8).
 
 import { uuid7 } from '../shared/uuid7.ts';
-import type { CourseInput, SchoolRef } from '../shared/courses.ts';
+import type { CourseInput, CourseKind, SchoolRef } from '../shared/courses.ts';
 
 export type CourseRow = {
   id: string;
+  kind: CourseKind;
   name: string;
   subject_code: string | null;
   course_number: string | null;
@@ -19,10 +20,12 @@ export type CourseRow = {
 
 export type Course = {
   id: string;
+  kind: CourseKind;
   name: string;
   code: string | null;
   title: string | null;
-  school: SchoolRef;
+  /** Null for personal courses (LIB-01b). */
+  school: SchoolRef | null;
   codeVerified: boolean;
   archived: boolean;
   createdAt: number;
@@ -31,10 +34,11 @@ export type Course = {
 export function toCourse(r: CourseRow): Course {
   return {
     id: r.id,
+    kind: r.kind === 'personal' ? 'personal' : 'college',
     name: r.name,
     code: r.subject_code && r.course_number ? `${r.subject_code} ${r.course_number}` : null,
     title: r.official_title,
-    school: { unitid: r.institution_unitid, name: r.institution_name, domain: r.institution_domain },
+    school: r.kind === 'personal' ? null : { unitid: r.institution_unitid, name: r.institution_name, domain: r.institution_domain },
     codeVerified: r.code_verified === 1,
     archived: r.archived_at !== null,
     createdAt: r.created_at,
@@ -61,7 +65,7 @@ export async function setHomeSchool(db: D1Database, userId: string, school: Scho
   return school;
 }
 
-const COLS = 'id, name, subject_code, course_number, official_title, institution_unitid, institution_name, institution_domain, code_verified, archived_at, created_at';
+const COLS = 'id, kind, name, subject_code, course_number, official_title, institution_unitid, institution_name, institution_domain, code_verified, archived_at, created_at';
 
 export async function listCourses(db: D1Database, userId: string): Promise<Course[]> {
   const res = await db
@@ -79,7 +83,8 @@ export class DuplicateCourse extends Error {
 }
 
 export async function createCourse(db: D1Database, userId: string, input: CourseInput, now = Date.now()): Promise<Course> {
-  if (input.subject && input.number) {
+  const school = input.school ?? { unitid: null, name: '', domain: null }; // personal: no school
+  if (input.subject && input.number && input.school) {
     const dup = await db
       .prepare(
         `SELECT id FROM courses WHERE user_id = ? AND subject_code = ? AND course_number = ? AND archived_at IS NULL
@@ -92,10 +97,10 @@ export async function createCourse(db: D1Database, userId: string, input: Course
   const id = uuid7(now);
   await db
     .prepare(
-      `INSERT INTO courses (id, user_id, name, institution_unitid, institution_name, institution_domain, subject_code, course_number,
-        official_title, code_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO courses (id, user_id, kind, name, institution_unitid, institution_name, institution_domain, subject_code, course_number,
+        official_title, code_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     )
-    .bind(id, userId, input.title, input.school.unitid, input.school.name, input.school.domain, input.subject, input.number, input.title, now, now)
+    .bind(id, userId, input.kind, input.title, school.unitid, school.name, school.domain, input.subject, input.number, input.kind === 'personal' ? null : input.title, now, now)
     .run();
   const row = await db.prepare(`SELECT ${COLS} FROM courses WHERE id = ? AND user_id = ?`).bind(id, userId).first<CourseRow>();
   if (!row) throw new Error('Course missing after insert');

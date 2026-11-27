@@ -7,10 +7,12 @@ import { api } from './api.ts';
 
 export type Course = {
   id: string;
+  /** 'personal' = a subject for its own sake: no school, no code (LIB-01b). */
+  kind: 'college' | 'personal';
   name: string;
   code: string | null;
   title: string | null;
-  school: SchoolRef;
+  school: SchoolRef | null;
   codeVerified: boolean;
   archived: boolean;
   createdAt: number;
@@ -42,7 +44,7 @@ export async function chooseSchool(school: SchoolRef): Promise<void> {
   set({ school: r.school });
 }
 
-export async function addCourse(input: { code: string; title: string }): Promise<Course> {
+export async function addCourse(input: { kind: 'college' | 'personal'; code: string; title: string }): Promise<Course> {
   const r = await api<{ course: Course }>('POST', '/api/courses', input);
   set({ courses: [...state.courses, r.course] });
   return r.course;
