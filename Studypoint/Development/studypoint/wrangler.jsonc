@@ -24,8 +24,13 @@
   "vars": {
     "ENVIRONMENT": "production",
     "ACCESS_TEAM_DOMAIN": "shrill-hat-b870.cloudflareaccess.com",
-    "ACCESS_AUD": "70ec5742ef21a1fbb6e1514cebcf3ef8a1719921cf5befd0c2b74290dfbb2ff4"
+    "ACCESS_AUD": "70ec5742ef21a1fbb6e1514cebcf3ef8a1719921cf5befd0c2b74290dfbb2ff4",
+    // Step 5 (2026-11-27): which Workers AI model does each task ("Balanced" tier, Alex's choice). Model IDs
+    // live ONLY here (AGENTS 3). Switch "answer"/"generate" to larger models once on Workers Paid.
+    "AI_MODELS": "{\"answer\":\"@cf/openai/gpt-oss-120b\",\"generate\":\"@cf/openai/gpt-oss-120b\",\"validate\":\"@cf/openai/gpt-oss-20b\",\"grade\":\"@cf/openai/gpt-oss-20b\",\"embed\":\"@cf/baai/bge-m3\",\"ocr\":\"@cf/meta/llama-4-scout-17b-16e-instruct\"}"
   },
+  // Workers AI (step 5). Personal content only ever goes here, never to a provider that trains on it (PRV-02).
+  "ai": { "binding": "AI" },
   // T0.05: storage. Created 2026-11-26; 0001_init.sql applied (schema fingerprint verified against the file).
   // R2 (FILES), Workers AI (AI) and the ingestion Workflow are added once Workers Paid is active.
   "d1_databases": [

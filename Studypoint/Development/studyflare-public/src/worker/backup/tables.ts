@@ -29,6 +29,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'entity_tags', scope: viaParent('tag_id', 'tags') },
   { name: 'sources', scope: 'user_id = ?1' },
   { name: 'source_topics', scope: viaParent('source_id', 'sources') },
+  // Step 5: which sources have an encrypted search index in R2 (the bundles themselves aren't exported).
+  { name: 'source_index', scope: 'user_id = ?1' },
   { name: 'source_versions', scope: viaParent('source_id', 'sources') },
   { name: 'locations', scope: `source_version_id IN (SELECT id FROM source_versions WHERE ${viaParent('source_id', 'sources')})` },
   { name: 'passages', scope: 'user_id = ?1' },

@@ -533,6 +533,19 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
+-- Added in migration 0008 (2026-11-27): processed material for AI (step 5, ARCHITECTURE A24). The browser
+-- builds one encrypted bundle per source (passages + vectors) in R2 at index/<user>/<source>; this row
+-- records that it exists and which content fingerprint it was built from.
+CREATE TABLE source_index (
+  source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint TEXT NOT NULL,
+  passages INTEGER NOT NULL CHECK (passages >= 0),
+  embed_model TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 -- Migration 0007 (2026-11-27): flashcard review (step 4, ARCHITECTURE A23).
 -- ALTER TABLE settings ADD COLUMN new_per_day INTEGER NOT NULL DEFAULT 20 CHECK (new_per_day BETWEEN 0 AND 200);
 -- ALTER TABLE card_states ADD COLUMN learning_steps INTEGER NOT NULL DEFAULT 0;   -- FSRS 6 (re)learning step position

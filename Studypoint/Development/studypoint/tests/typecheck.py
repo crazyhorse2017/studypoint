@@ -65,6 +65,7 @@ TYPE_PACKAGES = [
     "pdfjs-dist",
     "fflate",
     "ts-fsrs",
+    "mermaid",
 ]
 # Transitive type-only dependencies (resolved from the dependent package's package.json).
 TRANSITIVE = {"@types/react": ["csstype"]}

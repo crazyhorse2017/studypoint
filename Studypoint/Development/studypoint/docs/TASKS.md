@@ -78,6 +78,15 @@ There's no Anki or Quizlet import: Studyflare starts blank.
 - [x] **T1.15** *(done early, 2026-11-26: `src/shared/citations.ts`. Normalisation with an offset map back to the original text, exact match, then fuzzy match using banded Levenshtein with a trigram prefilter that tolerates OCR typos. Thresholds 0.92 text / 0.85 OCR, quotes of at least 4 tokens. 11 tests, including stitched-fragment rejection and a performance budget)* Citation verifier module (normalise, exact, fuzzy, minimum length) — `AST-02` · T0.03 · **done when** the unit test table in TESTING §4.1 passes
 - [ ] **T1.16** *(stream parser done early, 2026-11-26: `src/shared/segments.ts`. Coverage tag, sentence buffering, ⟦P#: "quote"⟧ markers, `<general>` blocks and `<conflict/>`/`<uncertain/>` flags. Output is identical at any chunk size from 1 to 64 characters, and LaTeX and decimals don't split sentences)* Chat backend: retrieval, coverage threshold, prompt `chat@1`, sentence-buffered SSE stream with verification, segment persistence, mixed-privacy routing and disclosure — `AST-01..05`, `PRV-03` · T1.14, T1.15, T0.14 · **done when** streaming works on preview and the privacy disclosure is correct for each route
 - [ ] **T1.17** Assistant UI: conversations, scope chips, TrustBlock rendering, citation chip + preview popover, not-found actions, tutor toggle, KaTeX/MathML, live-region announcements — `AST-03..08`, `UX-04` · T1.16 · **done when** axe passes and a screen-reader pass reads citations and segment labels correctly
+- [ ] **Step 5: AI** *(built 2026-11-27, A24)*:
+  - **What's in:** processing, OCR, encrypted search indexes, Search, Ask with verified citations and tutor mode, trusted web lookup, a "plan from my material" course planner, study guides with diagrams, flashcard generation with a review tray, and practice quizzes (MCQ, T/F, numeric, short answer) with auto-grading.
+  - **Remaining:**
+    - Saved conversations (messages tables)
+    - Streaming answers
+    - Embedding-based duplicate check for generated items
+    - The `ai-eval` harness and golden set (T1.26, AGENTS 7)
+    - Image occlusion from AI
+    - Worked-problem cards
 - [ ] **T1.18–T1.20 + CRD-07** *(step 4 built 2026-11-27, all at once as Alex asked, A23):*
   - **Cards:** four types (Front & back with optional reverse, Typed answer, Fill in the blank with hints, and Image occlusion over photos or PDF pages with a keyboard alternative to dragging), encrypted payloads, and an editor with preview.
   - **Review:** FSRS review that's fully keyboard-driven, with interval previews and 5-second undo. Learning steps repeat within the session. Courses are interleaved. 20 new cards a day and 90% recall by default, both adjustable in Settings → Study.

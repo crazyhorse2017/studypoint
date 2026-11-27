@@ -33,8 +33,11 @@ export type FileInfo = {
   chunks: number;
   title: string;
   status: 'uploading' | 'ready';
-  /** 'link' = imported from a web address (sources.origin 'lookup_url'); the address is inside the encrypted file. */
-  origin: 'upload' | 'link';
+  /**
+   * 'link' = imported from a web address (sources.origin 'lookup_url'); the address is inside the encrypted file.
+   * 'ai' = made by Studyflare's AI (study guides, diagrams; origin 'ai_primer', never cited, LKP-04).
+   */
+  origin: 'upload' | 'link' | 'ai';
   createdAt: number;
 };
 
@@ -46,12 +49,12 @@ type Row = {
 const info = (r: Row): FileInfo => ({
   id: r.id, versionId: r.version_id, courseId: r.course_id, kind: r.kind, mime: r.mime, bytes: r.bytes,
   chunks: chunkCount(r.bytes), title: r.title, status: r.status === 'ready' ? 'ready' : 'uploading',
-  origin: r.origin === 'lookup_url' ? 'link' : 'upload', createdAt: r.created_at,
+  origin: r.origin === 'lookup_url' ? 'link' : r.origin === 'ai_primer' ? 'ai' : 'upload', createdAt: r.created_at,
 });
 
 const SELECT = `SELECT s.id, v.id AS version_id, s.course_id, s.kind, v.mime, v.bytes, s.title, v.status, s.origin, s.created_at
   FROM sources s JOIN source_versions v ON v.id = s.current_version_id
-  WHERE s.user_id = ? AND s.kind IN ('pdf','docx','pptx','image','md') AND s.origin IN ('upload','lookup_url') AND s.deleted_at IS NULL`;
+  WHERE s.user_id = ? AND s.kind IN ('pdf','docx','pptx','image','md') AND s.origin IN ('upload','lookup_url','ai_primer') AND s.deleted_at IS NULL`;
 
 export const chunkKey = (userId: string, versionId: string, n: number) => `files/${userId}/${versionId}/${n}`;
 
@@ -88,14 +91,15 @@ export async function createUpload(db: D1Database, userId: string, input: unknow
   const dup = await db.prepare(`SELECT s.id FROM source_versions v JOIN sources s ON s.id = v.source_id
     WHERE s.user_id = ? AND v.content_hash = ? AND s.deleted_at IS NULL LIMIT 1`).bind(userId, contentHash).first<{ id: string }>();
   if (dup) throw new FileError(409, 'This file is already in your library.', dup.id);
-  const origin = b['origin'] === 'link' ? 'lookup_url' : 'upload';
+  const origin = b['origin'] === 'link' ? 'lookup_url' : b['origin'] === 'ai' ? 'ai_primer' : 'upload';
+  if (origin === 'ai_primer' && kind !== 'md') throw new FileError(400, 'AI-made materials are Markdown.');
   await db.batch([
     db.prepare(`INSERT INTO sources (id, user_id, course_id, title, kind, origin, privacy, citeable, current_version_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'personal', 1, ?, ?, ?)`).bind(sourceId, userId, courseId, title, kind, origin, versionId, now, now),
+      VALUES (?, ?, ?, ?, ?, ?, 'personal', ?, ?, ?, ?)`).bind(sourceId, userId, courseId, title, kind, origin, origin === 'ai_primer' ? 0 : 1, versionId, now, now),
     db.prepare(`INSERT INTO source_versions (id, source_id, version_no, content_hash, r2_key, mime, bytes, status, created_at)
       VALUES (?, ?, 1, ?, ?, ?, ?, 'uploading', ?)`).bind(versionId, sourceId, contentHash, `files/${userId}/${versionId}`, mime, bytes, now),
   ]);
-  return { id: sourceId, versionId, courseId, kind: kind as FileKind, mime, bytes, chunks: chunkCount(bytes), title: title as string, status: 'uploading', origin: origin === 'lookup_url' ? 'link' : 'upload', createdAt: now };
+  return { id: sourceId, versionId, courseId, kind: kind as FileKind, mime, bytes, chunks: chunkCount(bytes), title: title as string, status: 'uploading', origin: origin === 'lookup_url' ? 'link' : origin === 'ai_primer' ? 'ai' : 'upload', createdAt: now };
 }
 
 /** Store one encrypted chunk. Only while the upload is open, only valid indexes, only sealed-looking bytes. */
@@ -137,11 +141,11 @@ export async function getChunk(db: D1Database, bucket: R2Bucket, userId: string,
 
 /** Soft delete: the file disappears from the Library and can be restored. Storage is cleaned up later. */
 export async function deleteFile(db: D1Database, userId: string, id: string, now = Date.now()): Promise<boolean> {
-  const res = await db.prepare("UPDATE sources SET deleted_at = ? WHERE id = ? AND user_id = ? AND origin IN ('upload','lookup_url') AND deleted_at IS NULL").bind(now, id, userId).run();
+  const res = await db.prepare("UPDATE sources SET deleted_at = ? WHERE id = ? AND user_id = ? AND origin IN ('upload','lookup_url','ai_primer') AND deleted_at IS NULL").bind(now, id, userId).run();
   return (res.meta.changes ?? 0) > 0;
 }
 
 export async function restoreFile(db: D1Database, userId: string, id: string): Promise<boolean> {
-  const res = await db.prepare("UPDATE sources SET deleted_at = NULL WHERE id = ? AND user_id = ? AND origin IN ('upload','lookup_url') AND deleted_at IS NOT NULL").bind(id, userId).run();
+  const res = await db.prepare("UPDATE sources SET deleted_at = NULL WHERE id = ? AND user_id = ? AND origin IN ('upload','lookup_url','ai_primer') AND deleted_at IS NOT NULL").bind(id, userId).run();
   return (res.meta.changes ?? 0) > 0;
 }

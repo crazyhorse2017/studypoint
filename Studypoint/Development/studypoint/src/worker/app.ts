@@ -16,6 +16,20 @@ import { effectiveEnv, needsSetup, readStoredConfig, writeStoredConfig, type Sto
 import { SetupError, runSetup } from './setup/cloudflare.ts';
 import { CardError, MAX_CARD_CHARS, createCard, deleteCard, getStudySettings, listCards, restoreCard, reviewQueue, reviewSummary, setExam, setStudySettings, submitReview, updateCard, upcomingExams } from './cards.ts';
 import { ImportError, importUrl } from './importUrl.ts';
+import { AiError } from './ai/gateway.ts';
+import { handleAnswer, handleEmbed, handleGenerate, handleGrade, handleOcr, handleValidate } from './ai/handlers.ts';
+import { LookupError, trustedSearch } from './ai/lookup.ts';
+import { IndexError, MAX_INDEX_BYTES, getIndex, listIndexes, putIndex } from './aiIndex.ts';
+import { QuizError, createQuiz, getQuiz, hideQuiz, listQuizzes, submitQuiz } from './quizzes.ts';
+
+async function quizCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof QuizError) return apiError(err.status, 'quiz_error', err.message);
+    throw err;
+  }
+}
 import { FileError, completeUpload, createUpload, deleteFile, getChunk, getFile, listFiles, putChunk, restoreFile } from './files.ts';
 import { CHUNK_BYTES } from '../shared/fileSniff.ts';
 import { MAX_NOTE_BODY_CHARS, NoteError, createNote, deleteNote, getNote, listNotes, restoreNote, updateNote } from './notes.ts';
@@ -49,6 +63,30 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
 /** Note bodies are larger than settings-sized JSON: the body limit plus room for the other fields. */
 const MAX_NOTE_JSON = MAX_NOTE_BODY_CHARS + 16 * 1024;
 const MAX_CARD_JSON = MAX_CARD_CHARS + 16 * 1024;
+/** AI requests carry the decrypted passages for one request (up to ~140k characters) or one image. */
+const MAX_AI_JSON = 9 * 1024 * 1024;
+
+/** Runs an AI/lookup/index operation, turning their errors into plain HTTP answers. */
+async function aiCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof AiError || err instanceof LookupError || err instanceof IndexError) return apiError(err.status, 'ai_error', err.message);
+    throw err;
+  }
+}
+
+/** A POST route that reads JSON and passes it to an AI handler. */
+function aiRoute(path: string, run: (env: Env, userId: string, body: Record<string, unknown>) => Promise<unknown>): Route {
+  return {
+    method: 'POST',
+    path,
+    handler: async ({ request, env, userId }) => {
+      if (!userId) return needsDb();
+      return withJson(request, (b) => aiCall(async () => json(await run(env, userId, (b ?? {}) as Record<string, unknown>))), MAX_AI_JSON);
+    },
+  };
+}
 
 const needsFiles = () => apiError(503, 'files_unavailable', "File storage isn't connected yet. Turn on R2 for this Studyflare to upload files.");
 
@@ -98,6 +136,11 @@ export const APP_VERSION = '0.1.0';
 
 export type Env = AuthEnv & {
   ASSETS: Fetcher;
+  /** Workers AI (step 5) and which model does which task (JSON). */
+  AI?: Ai;
+  AI_MODELS?: string;
+  /** Trusted web lookup (LKP-01); a Worker secret. */
+  TAVILY_API_KEY?: string;
   /** D1, R2 and the rest are bound in T0.05; routes that need them answer 503 until then. */
   DB?: D1Database;
   FILES?: R2Bucket;
@@ -215,6 +258,107 @@ export const ROUTES: readonly Route[] = [
       return (await removePasskey(env.DB, userId, params['id'] ?? ''))
         ? json(await getVault(env.DB, userId))
         : apiError(404, 'not_found', "That passkey isn't on this account.");
+    },
+  },
+  // Step 5 (A24): AI. The browser sends the decrypted text one request needs; nothing is stored.
+  aiRoute('/api/ai/embed', (env, u, b) => handleEmbed(env, u, b)),
+  aiRoute('/api/ai/ocr', (env, u, b) => handleOcr(env, u, b)),
+  aiRoute('/api/ai/answer', (env, u, b) => handleAnswer(env, u, b)),
+  aiRoute('/api/ai/generate', (env, u, b) => handleGenerate(env, u, b)),
+  aiRoute('/api/ai/validate', (env, u, b) => handleValidate(env, u, b)),
+  aiRoute('/api/ai/grade', (env, u, b) => handleGrade(env, u, b)),
+  aiRoute('/api/lookup', async (env, _u, b) => ({ results: await trustedSearch(env.TAVILY_API_KEY, b['query']), configured: Boolean(env.TAVILY_API_KEY) })),
+  {
+    method: 'GET',
+    path: '/api/ai/status',
+    handler: ({ env }) => json({ ai: Boolean(env.AI && env.AI_MODELS), lookup: Boolean(env.TAVILY_API_KEY), files: Boolean(env.FILES) }),
+  },
+  {
+    // QZ-01..04: practice quizzes (encrypted questions; scores in the clear).
+    method: 'GET',
+    path: '/api/quizzes',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ quizzes: await listQuizzes(env.DB, userId, url.searchParams.get('course') ?? '') });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/quizzes',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => quizCall(async () => json({ quiz: await createQuiz(db, userId, b) }, 201)), 4 * 1024 * 1024);
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/quizzes/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const quiz = await getQuiz(env.DB, userId, params['id'] ?? '');
+      return quiz ? json({ quiz }) : apiError(404, 'not_found', "That quiz doesn't exist.");
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/quizzes/:id/submit',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => quizCall(async () => json(await submitQuiz(db, userId, params['id'] ?? '', b))), 4 * 1024 * 1024);
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/quizzes/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await hideQuiz(env.DB, userId, params['id'] ?? '')) ? json({ deleted: true }) : apiError(404, 'not_found', "That quiz doesn't exist.");
+    },
+  },
+  {
+    // Encrypted search indexes (passages + vectors), one per source, built in the browser.
+    method: 'GET',
+    path: '/api/index',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ indexes: await listIndexes(env.DB, userId, url.searchParams.get('course')) });
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/index/:id',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      if (Number(request.headers.get('Content-Length') ?? '0') > MAX_INDEX_BYTES) return apiError(413, 'too_large', 'This index is too large.');
+      const body = new Uint8Array(await request.arrayBuffer());
+      const db = env.DB;
+      const bucket = env.FILES;
+      const meta = {
+        fingerprint: request.headers.get('X-Index-Fingerprint') ?? '',
+        passages: Number(request.headers.get('X-Index-Passages') ?? '-1'),
+        embedModel: decodeURIComponent(request.headers.get('X-Index-Model') ?? ''),
+      };
+      return aiCall(async () => {
+        await putIndex(db, bucket, userId, params['id'] ?? '', body, meta);
+        return json({ ok: true });
+      });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/index/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      const db = env.DB;
+      const bucket = env.FILES;
+      return aiCall(async () => {
+        const obj = await getIndex(db, bucket, userId, params['id'] ?? '');
+        return new Response(obj.body, { headers: { ...API_SECURITY_HEADERS, 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, no-cache' } });
+      });
     },
   },
   {

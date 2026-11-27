@@ -108,6 +108,13 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   Partial failures name the failing pages.
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
+- **AI-01 MUST (step 5, added 2026-11-27)** — **AI course materials from your own files and links.**
+  - **Processing:** each course's material is processed on the device, with OCR for photos and scans.
+  - **AI can make:** a course plan (read from syllabi and other files for direction), study guides (short articles with diagrams), diagrams, flashcards (checked, then chosen in a review tray), and auto-graded practice quizzes (multiple choice, true/false, numeric, short answer).
+  - **Labelling:** AI-made materials are labelled as AI and are never used as citation sources (`LKP-04`).
+  - **Ask and Search** cover the course, with every citation verified (`AST-*`).
+  - **Trusted web lookup** (`LKP-01`) runs when your material doesn't cover a question.
+  - **Privacy:** personal material only ever goes to Workers AI, for one request at a time, and is never stored.
 - **LIB-02b MUST (added 2026-11-27)** — **Import from a link.** Paste a web address into a course's Files tab:
   - A web page is saved as readable text (headings, lists, tables), with a link back to the original and the date.
   - A link to a PDF, Word, PowerPoint or image is saved as that file.

@@ -39,7 +39,7 @@ function fakes() {
       throw new Error('unexpected first: ' + sql);
     },
     async all() {
-      if (sql.includes("s.origin IN ('upload','lookup_url')")) return { results: joined(a[0]).filter((r) => a.length < 2 || r.course_id === a[1]) };
+      if (sql.includes("s.origin IN ('upload','lookup_url','ai_primer')")) return { results: joined(a[0]).filter((r) => a.length < 2 || r.course_id === a[1]) };
       throw new Error('unexpected all: ' + sql);
     },
     async run() {
@@ -60,7 +60,7 @@ function fakes() {
     prepare: (sql: string) => stmt(sql),
     async batch(list: Array<{ sql: string; a: unknown[] }>) {
       for (const { sql, a } of list) {
-        if (sql.startsWith('INSERT INTO sources')) sources.set(a[0] as string, { id: a[0] as string, user_id: a[1] as string, course_id: a[2] as string, title: a[3] as string, kind: a[4] as string, origin: a[5] as string, current_version_id: a[6] as string, created_at: a[7] as number, deleted_at: null });
+        if (sql.startsWith('INSERT INTO sources')) sources.set(a[0] as string, { id: a[0] as string, user_id: a[1] as string, course_id: a[2] as string, title: a[3] as string, kind: a[4] as string, origin: a[5] as string, current_version_id: a[7] as string, created_at: a[8] as number, deleted_at: null });
         else if (sql.startsWith('INSERT INTO source_versions')) versions.set(a[0] as string, { id: a[0] as string, source_id: a[1] as string, content_hash: a[2] as string, mime: a[4] as string, bytes: a[5] as number, status: 'uploading' });
         else throw new Error('unexpected batch: ' + sql);
       }
@@ -132,6 +132,15 @@ export function register(test: TestFn, assert: Assert): void {
     assert.equal(f.origin, 'link');
     assert.equal(sources.get(m.sourceId)?.origin, 'lookup_url');
     assert.equal((await listFiles(db, 'u1'))[0]?.origin, 'link');
+  });
+
+  test('files (AI-made): stored as ai_primer, never citeable, Markdown only', async () => {
+    const { db, sources } = fakes();
+    const m = await meta({ origin: 'ai', kind: 'md', mime: 'text/markdown', bytes: 900, contentHash: 'c'.repeat(64) });
+    const f = await createUpload(db, 'u1', m);
+    assert.equal(f.origin, 'ai');
+    assert.equal(sources.get(m.sourceId)?.origin, 'ai_primer');
+    assert.equal(await status(createUpload(db, 'u1', await meta({ origin: 'ai', contentHash: 'd'.repeat(64) }))), 400, 'AI materials must be Markdown');
   });
 
   test('files: the same file (same fingerprint) is refused as a duplicate, until the first is deleted', async () => {

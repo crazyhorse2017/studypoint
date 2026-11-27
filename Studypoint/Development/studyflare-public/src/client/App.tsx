@@ -21,6 +21,8 @@ const ReaderPage = lazy(() => import('./reader/ReaderPage.tsx'));
 // Course pages and reviews bring KaTeX and the scheduler.
 const CoursePage = lazy(() => import('./courses/CoursePage.tsx'));
 const ReviewPage = lazy(() => import('./cards/ReviewPage.tsx'));
+const QuizPage = lazy(() => import('./quizzes/QuizPage.tsx'));
+const AssistantPage = lazy(() => import('./ai/AssistantPage.tsx'));
 
 type RouteDef = { path: string; render: (params: Record<string, string>) => ReactNode };
 
@@ -32,7 +34,8 @@ const ROUTES: readonly RouteDef[] = [
   { path: '/notes/:id', render: (p) => <NotePage id={p['id'] ?? ''} /> },
   { path: '/files/:id', render: (p) => <ReaderPage id={p['id'] ?? ''} /> },
   { path: '/review', render: () => <ReviewPage /> },
-  { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
+  { path: '/quizzes/:id', render: (p) => <QuizPage id={p['id'] ?? ''} /> },
+  { path: '/assistant', render: () => <AssistantPage /> },
   { path: '/settings', render: () => <SettingsPage /> },
   ...(GalleryPage ? [{ path: '/ds', render: () => <GalleryPage /> }] : []),
 ];

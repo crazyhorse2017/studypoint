@@ -3,6 +3,8 @@
 
 import { useMemo } from 'react';
 import { parseMarkdown, type Inline } from '../../shared/markdown.ts';
+import { MathText } from '../cards/MathText.tsx';
+import { Diagram } from './Diagram.tsx';
 
 function Inlines({ items }: { items: readonly Inline[] }) {
   return (
@@ -22,7 +24,8 @@ function Inlines({ items }: { items: readonly Inline[] }) {
               </a>
             );
           default:
-            return <span key={i}>{it.text}</span>;
+            // Word-style math in text (\frac{a}{b}) renders with KaTeX, like everywhere else.
+            return <MathText key={i} text={it.text} />;
         }
       })}
     </>
@@ -44,7 +47,7 @@ export function MarkdownView({ text }: { text: string }) {
           case 'quote':
             return <blockquote key={i}><Inlines items={b.inline} /></blockquote>;
           case 'code':
-            return <pre key={i}><code>{b.text}</code></pre>;
+            return b.lang === 'mermaid' ? <Diagram key={i} code={b.text} /> : <pre key={i}><code>{b.text}</code></pre>;
           case 'rule':
             return <hr key={i} className="border-border" />;
           case 'list': {

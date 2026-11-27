@@ -91,6 +91,11 @@ Workers Paid is needed before P1 ingestion, not before P0.
 - **TypeScript is pinned to 6.0.3, not 7.x.** TypeScript 7 is the native-Go compiler. It ships platform binaries and no `lib/typescript.js`, so it can't run inside the browser-based local type check. Its unsigned binaries would also be blocked by Smart App Control. CI and the local check use the same 6.0.3.
 - **Vitest must stay on 4.x** (4.1.12 when added). `@cloudflare/vitest-pool-workers` 0.23 requires `vitest ^4.1`, but Vitest's latest is 5.x.
 - jose 6.2.18 (MIT, no dependencies), added in T0.12 for Access JWT verification.
+- **AI (step 5, 2026-11-27):**
+  - **Bindings:** `"ai": {"binding": "AI"}` plus `AI_MODELS` (JSON var) in `wrangler.jsonc`.
+  - **Mermaid:** `mermaid` 12.3.0 (MIT), lazy-loaded only when a diagram is shown. It renders in strict security mode and is displayed as an image.
+  - **Web lookup** needs a **`TAVILY_API_KEY`** Worker secret. Make a free account at tavily.com (1,000 searches/month), copy the key, then go to Workers & Pages → studyflare → Settings → Variables and Secrets and add a secret. Without it, Ask still works; only "Look it up on trusted websites" says it isn't set up.
+  - **Model tiers:** switching to "Maximum quality" later means changing `AI_MODELS` only.
 - **Cards + review (step 4, 2026-11-27):** `ts-fsrs` 6.0.1 (MIT, the reference FSRS implementation, plus its one dependency `@open-spaced-repetition/srs-kit`). It's imported only by `shared/fsrs.ts`. The Worker loads it lazily inside `submitReview`, so the local test harness, which can't load npm packages, still loads `app.ts`. Scheduling results are covered by CI; locally, the pure parts (exam cap, interleave, cloze, typed answers) and the card storage rules are tested.
 - **Uploads + Reader (steps 2b/3, 2026-11-27):**
   - **Packages:** `pdfjs-dist` 6.5.438 (Apache-2.0, Mozilla's PDF renderer) and `fflate` 0.8.3 (MIT, tiny unzipper for .docx/.pptx). Both are lazy-loaded on `/files/:id` only.

@@ -22,8 +22,11 @@
     "ALLOWED_EMAILS": "",
     // Keep "todo": on first open, Studyflare sets up its Cloudflare Access login for you and stores these.
     "ACCESS_TEAM_DOMAIN": "todo",
-    "ACCESS_AUD": "todo"
+    "ACCESS_AUD": "todo",
+    // Which Workers AI model does each task. Runs on the free daily allowance; switch to larger models on Workers Paid.
+    "AI_MODELS": "{\"answer\":\"@cf/openai/gpt-oss-120b\",\"generate\":\"@cf/openai/gpt-oss-120b\",\"validate\":\"@cf/openai/gpt-oss-20b\",\"grade\":\"@cf/openai/gpt-oss-20b\",\"embed\":\"@cf/baai/bge-m3\",\"ocr\":\"@cf/meta/llama-4-scout-17b-16e-instruct\"}"
   },
+  "ai": { "binding": "AI" },
   // No database_id: the first deploy creates the database, and the deploy script applies migrations.
   "d1_databases": [{ "binding": "DB", "database_name": "studyflare", "migrations_dir": "migrations" }]
 }

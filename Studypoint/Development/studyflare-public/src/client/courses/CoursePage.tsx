@@ -11,9 +11,12 @@ import { NotesSection } from '../notes/NotesSection.tsx';
 import { CardsSection } from '../cards/CardsSection.tsx';
 import { fetchStudySettings, fetchSummary, type Summary } from '../cards/cardsApi.ts';
 import { ExamDate } from './ExamDate.tsx';
+import { QuizzesSection } from '../quizzes/QuizzesSection.tsx';
+import { AskPanel } from '../ai/AskPanel.tsx';
+import { CreatePanel } from '../ai/CreatePanel.tsx';
 
-type Tab = 'overview' | 'files' | 'notes' | 'cards';
-const TABS: readonly Tab[] = ['overview', 'files', 'notes', 'cards'];
+type Tab = 'overview' | 'files' | 'notes' | 'cards' | 'quizzes' | 'ask' | 'create';
+const TABS: readonly Tab[] = ['overview', 'files', 'notes', 'cards', 'quizzes', 'ask', 'create'];
 
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -38,6 +41,12 @@ function Overview({ courseId }: { courseId: string }) {
           </Link>
           <Link to={`/courses/${courseId}?tab=cards`} className="inline-flex min-h-10 items-center rounded-md border border-border-strong px-4 text-text hover:bg-sunken">
             Make cards
+          </Link>
+          <Link to={`/courses/${courseId}?tab=ask`} className="inline-flex min-h-10 items-center rounded-md border border-border-strong px-4 text-text hover:bg-sunken">
+            Ask a question
+          </Link>
+          <Link to={`/courses/${courseId}?tab=create`} className="inline-flex min-h-10 items-center rounded-md border border-border-strong px-4 text-text hover:bg-sunken">
+            Create study materials
           </Link>
         </div>
       </section>
@@ -99,6 +108,9 @@ export default function CoursePage({ id }: { id: string }) {
           { value: 'files', label: 'Files', panel: <FilesSection course={id} /> },
           { value: 'notes', label: 'Notes', panel: <NotesSection course={id} /> },
           { value: 'cards', label: 'Cards', panel: <CardsSection courseId={id} /> },
+          { value: 'quizzes', label: 'Quizzes', panel: <QuizzesSection courseId={id} /> },
+          { value: 'ask', label: 'Ask', panel: <AskPanel courseId={id} /> },
+          { value: 'create', label: 'Create', panel: <CreatePanel courseId={id} /> },
         ]}
       />
     </div>

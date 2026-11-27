@@ -374,7 +374,7 @@ def _():
     """EXPLAIN every SQL string in these Worker modules: catches table/column typos without D1."""
     db = fresh_db()
     checked = 0
-    for name in ("notes.ts", "vault.ts", "files.ts", "cards.ts", "courses.ts", "settings.ts", "setup/config.ts"):
+    for name in ("notes.ts", "vault.ts", "files.ts", "cards.ts", "quizzes.ts", "aiIndex.ts", "ai/handlers.ts", "ai/gateway.ts", "courses.ts", "settings.ts", "setup/config.ts"):
         src = (ROOT / "src" / "worker" / name).read_text(encoding="utf-8")
         consts = {m.group(1): m.group(2) for m in re.finditer(r"const (\w+) = `([^`]*)`;", src, re.S)}
         for m in re.finditer(r"(['`])((?:SELECT|INSERT|UPDATE|DELETE)\b.*?)\1", src, re.S):

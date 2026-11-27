@@ -15,7 +15,7 @@ export type MdBlock =
   | { type: 'para'; inline: Inline[] }
   | { type: 'list'; ordered: boolean; items: Array<{ level: number; inline: Inline[] }> }
   | { type: 'quote'; inline: Inline[] }
-  | { type: 'code'; text: string }
+  | { type: 'code'; text: string; lang: string }
   | { type: 'table'; rows: Inline[][][] }
   | { type: 'rule' };
 
@@ -52,9 +52,10 @@ export function parseMarkdown(md: string): MdBlock[] {
     const line = lines[i] ?? '';
     if (/^```/.test(line.trim())) {
       flushPara();
+      const lang = line.trim().slice(3).trim().toLowerCase();
       const code: string[] = [];
       for (i += 1; i < lines.length && !/^```/.test((lines[i] ?? '').trim()); i += 1) code.push(lines[i] ?? '');
-      blocks.push({ type: 'code', text: code.join('\n') });
+      blocks.push({ type: 'code', text: code.join('\n'), lang });
       continue;
     }
     if (!line.trim()) {
