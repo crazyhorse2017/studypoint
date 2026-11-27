@@ -533,6 +533,13 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
+-- Uploaded files (step 2b, 2026-11-27, ARCHITECTURE A22) use the existing tables, no migration:
+--   sources: kind pdf/docx/pptx/image/md, origin 'upload', privacy 'personal', title = sf1 envelope
+--            (AAD "<source id>#title"), current_version_id → the version below.
+--   source_versions: content_hash = HMAC fingerprint (keyed from the data key, NOT a plain SHA-256),
+--            r2_key = 'files/<user>/<version>' (chunks at …/<n>), mime, bytes = PLAINTEXT size (chunk count
+--            and sizes are derived from it), status 'uploading' → 'ready'.
+
 -- Migration 0006 (2026-11-26): personal courses (LIB-01b), a subject studied for its own sake with no school
 -- and no code. Personal rows keep institution_name = '' (it's NOT NULL) and NULL unitid/domain/code/title.
 -- ALTER TABLE courses ADD COLUMN kind TEXT NOT NULL DEFAULT 'college' CHECK (kind IN ('college','personal'));

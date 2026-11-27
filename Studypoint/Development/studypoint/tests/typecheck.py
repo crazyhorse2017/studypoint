@@ -62,6 +62,8 @@ TYPE_PACKAGES = [
     "@tiptap/extensions",
     "@tiptap/extension-mathematics",
     "katex",
+    "pdfjs-dist",
+    "fflate",
 ]
 # Transitive type-only dependencies (resolved from the dependent package's package.json).
 TRANSITIVE = {"@types/react": ["csstype"]}

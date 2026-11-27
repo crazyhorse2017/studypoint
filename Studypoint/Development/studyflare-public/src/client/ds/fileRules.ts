@@ -1,5 +1,6 @@
-// Client-side upload checks for FileDrop (LIB-02, NFR-SEC). These give fast feedback only;
-// the Worker re-checks every file by magic bytes (ARCHITECTURE §3.2), so a renamed file can't slip through.
+// Quick extension/size checks for FileDrop (LIB-02, NFR-SEC). The real type check is by magic bytes in
+// src/shared/fileSniff.ts, run in the browser BEFORE encryption (the Worker only ever sees ciphertext,
+// ARCHITECTURE A22), so a renamed file can't slip through.
 
 export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // Workers request body limit (ARCHITECTURE §3.2)
 

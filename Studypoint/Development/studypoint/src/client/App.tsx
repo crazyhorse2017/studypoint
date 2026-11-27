@@ -15,6 +15,8 @@ const GalleryPage = SHOW_GALLERY ? lazy(() => import('./pages/GalleryPage.tsx'))
 
 // The note editor is the biggest chunk (Tiptap + KaTeX), so it loads only when a note is opened.
 const NotePage = lazy(() => import('./notes/NotePage.tsx'));
+// The Reader brings pdf.js and the unzipper, so it also loads only when a file is opened.
+const ReaderPage = lazy(() => import('./reader/ReaderPage.tsx'));
 
 type RouteDef = { path: string; render: (params: Record<string, string>) => ReactNode };
 
@@ -22,6 +24,7 @@ const ROUTES: readonly RouteDef[] = [
   { path: '/', render: () => <TodayPage /> },
   { path: '/library', render: () => <LibraryPage /> },
   { path: '/notes/:id', render: (p) => <NotePage id={p['id'] ?? ''} /> },
+  { path: '/files/:id', render: (p) => <ReaderPage id={p['id'] ?? ''} /> },
   { path: '/review', render: () => <ComingSoonPage title="Review" what="Flashcard reviews, scheduled with FSRS, arrive in the next phase." /> },
   { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
   { path: '/settings', render: () => <SettingsPage /> },

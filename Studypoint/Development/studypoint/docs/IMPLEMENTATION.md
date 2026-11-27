@@ -91,6 +91,10 @@ Workers Paid is needed before P1 ingestion, not before P0.
 - **TypeScript is pinned to 6.0.3, not 7.x.** TypeScript 7 is the native-Go compiler. It ships platform binaries and no `lib/typescript.js`, so it can't run inside the browser-based local type check. Its unsigned binaries would also be blocked by Smart App Control. CI and the local check use the same 6.0.3.
 - **Vitest must stay on 4.x** (4.1.12 when added). `@cloudflare/vitest-pool-workers` 0.23 requires `vitest ^4.1`, but Vitest's latest is 5.x.
 - jose 6.2.18 (MIT, no dependencies), added in T0.12 for Access JWT verification.
+- **Uploads + Reader (steps 2b/3, 2026-11-27):**
+  - **Packages:** `pdfjs-dist` 6.5.438 (Apache-2.0, Mozilla's PDF renderer) and `fflate` 0.8.3 (MIT, tiny unzipper for .docx/.pptx). Both are lazy-loaded on `/files/:id` only.
+  - **Not chosen:** mammoth, because it brings 8 Node-oriented dependencies and HTML output that would need a sanitiser. Word and PowerPoint XML are parsed in `client/reader/ooxml.ts` instead.
+  - **Storage:** R2 bucket `studypoint-files` (ENAM), bound as `FILES` on 2026-11-27. The public one-click config leaves R2 out (it needs a card on the account), so uploads say "File storage isn't turned on" there.
 - **Notes editor (T1.23, 2026-11-26):**
   - **Packages:** `@tiptap/react`, `@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extensions` and `@tiptap/extension-mathematics`, all at 3.35.0 (MIT, ProseMirror underneath, also MIT), plus `katex` 0.18.11 (MIT; 0.19 is outside the math extension's peer range).
   - **Why:** Alex chose rich text with a toolbar and math (`LIB-08`). Tiptap is the most used ProseMirror toolkit, with accessible contenteditable, keyboard shortcuts and undo built in. Writing that by hand would be weeks of edge cases. KaTeX outputs MathML for screen readers (AGENTS 19).

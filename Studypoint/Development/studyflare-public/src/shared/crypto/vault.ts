@@ -125,6 +125,57 @@ export async function decryptText(dataKey: CryptoKey, envelope: string, recordId
   }
 }
 
+// ---------- binary envelopes (file chunks) ----------
+
+/** Binary format for file chunks (no base64 bloat): [0x01][12-byte IV][AES-GCM ciphertext + tag]. */
+export const BYTES_OVERHEAD = 1 + 12 + 16;
+
+export async function sealBytes(key: CryptoKey, plaintext: Uint8Array, aad: string): Promise<Uint8Array> {
+  const iv = randomBytes(12);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: buf(iv), additionalData: buf(utf8.encode(aad)) }, key, buf(plaintext)));
+  const out = new Uint8Array(1 + 12 + ct.length);
+  out[0] = 1;
+  out.set(iv, 1);
+  out.set(ct, 13);
+  return out;
+}
+
+export async function openBytes(key: CryptoKey, sealed: Uint8Array, aad: string): Promise<Uint8Array> {
+  if (sealed.length < BYTES_OVERHEAD || sealed[0] !== 1) throw new CryptoError('bad_envelope', 'Not a Studyflare encrypted chunk.');
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf(sealed.subarray(1, 13)), additionalData: buf(utf8.encode(aad)) }, key, buf(sealed.subarray(13)));
+    return new Uint8Array(pt);
+  } catch {
+    throw new CryptoError('wrong_secret', 'That key does not open this file.');
+  }
+}
+
+/**
+ * AAD for chunk `index` of `total` in one file version. Binding the total means a chunk can't be moved,
+ * dropped or reordered, and the file can't be silently truncated.
+ */
+export const chunkAad = (versionId: string, index: number, total: number) => `file:${versionId}:${index}:${total}`;
+
+/**
+ * A per-account HMAC key (HKDF from the data key) for content fingerprints. Duplicate uploads can be
+ * spotted (LIB-11) without the server learning a plain SHA-256 that would identify a known file.
+ */
+export async function deriveFingerprintKey(dataKeyRaw: Uint8Array): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey('raw', buf(dataKeyRaw), 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: buf(utf8.encode('studyflare')), info: buf(utf8.encode('content-fingerprint-v1')) },
+    base,
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
+    false,
+    ['sign'],
+  );
+}
+
+export async function fingerprint(key: CryptoKey, bytes: Uint8Array): Promise<string> {
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf(bytes)));
+  return Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ---------- recovery codes ----------
 
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';

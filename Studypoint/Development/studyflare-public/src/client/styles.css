@@ -216,6 +216,50 @@
     margin-block: 0.75em;
   }
 
+  /* Reader: PDF pages (step 3). The text layer is invisible text laid exactly over the page image, so
+     text can be selected, searched (Ctrl+F) and read by screen readers. Based on pdf.js's own viewer CSS. */
+  .pdf-page canvas {
+    display: block;
+  }
+  .textLayer {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    line-height: 1;
+    text-align: initial;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    z-index: 0;
+  }
+  .textLayer :is(span, br) {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+  }
+  .textLayer > :not(.markedContent),
+  .textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+  }
+  .textLayer span.markedContent {
+    top: 0;
+    height: 0;
+  }
+  .textLayer ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  /* Reader: Word documents. */
+  .doc-view h2 { font-family: var(--ff-ui); font-size: 1.5em; font-weight: 600; margin-top: 1em; }
+  .doc-view h3 { font-family: var(--ff-ui); font-size: 1.25em; font-weight: 600; margin-top: 0.75em; }
+  .doc-view h4 { font-family: var(--ff-ui); font-size: 1.1em; font-weight: 600; }
+  .doc-view ul { list-style: disc; padding-left: 1.5em; }
+  .doc-view ol { list-style: decimal; padding-left: 1.5em; }
+  .doc-view table { border-collapse: collapse; }
+  .doc-view td { border: 1px solid var(--border); padding: var(--s-2) var(--s-3); vertical-align: top; }
+
   /* Skip link: hidden until focused (WCAG 2.4.1). */
   .skip-link {
     position: absolute;

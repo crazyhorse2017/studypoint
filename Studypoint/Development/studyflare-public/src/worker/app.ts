@@ -5,7 +5,7 @@ import { authenticate, type TokenVerifier } from './auth/middleware.ts';
 import { readAuthConfig, type AuthConfig, type AuthEnv, type Identity } from './auth/policy.ts';
 import { ExportFormatError, gunzipJson, parseExportDocument } from './backup/format.ts';
 import { RestoreRefused, exportUser, restoreUser } from './backup/d1.ts';
-import { apiError, json } from './http.ts';
+import { API_SECURITY_HEADERS, apiError, json } from './http.ts';
 import { getAppearance, patchAppearance } from './settings.ts';
 import { DuplicateCourse, createCourse, deleteCourse, getHomeSchool, listCourses, setHomeSchool, updateCourse } from './courses.ts';
 import { validateCourse, validateSchool } from '../shared/courses.ts';
@@ -14,6 +14,8 @@ import { isOwner } from './owners.ts';
 import { parseAllowedEmails } from './auth/policy.ts';
 import { effectiveEnv, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
 import { SetupError, runSetup } from './setup/cloudflare.ts';
+import { FileError, completeUpload, createUpload, deleteFile, getChunk, getFile, listFiles, putChunk, restoreFile } from './files.ts';
+import { CHUNK_BYTES } from '../shared/fileSniff.ts';
 import { MAX_NOTE_BODY_CHARS, NoteError, createNote, deleteNote, getNote, listNotes, restoreNote, updateNote } from './notes.ts';
 import { VaultError, addPasskey, createVaultRow, getVault, markPasskeyUsed, removePasskey, updateVaultRow } from './vault.ts';
 
@@ -44,6 +46,21 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
 
 /** Note bodies are larger than settings-sized JSON: the body limit plus room for the other fields. */
 const MAX_NOTE_JSON = MAX_NOTE_BODY_CHARS + 16 * 1024;
+
+const needsFiles = () => apiError(503, 'files_unavailable', "File storage isn't connected yet. Turn on R2 for this Studyflare to upload files.");
+
+async function fileCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof FileError) {
+      return json({ error: { code: err.status === 409 && err.existingId ? 'duplicate' : 'file_error', message: err.message, existingId: err.existingId } }, err.status);
+    }
+    throw err;
+  }
+}
+
+const chunkIndex = (raw: string | undefined) => (raw !== undefined && /^\d{1,5}$/.test(raw) ? Number(raw) : -1);
 
 async function noteCall(fn: () => Promise<Response>): Promise<Response> {
   try {
@@ -175,6 +192,109 @@ export const ROUTES: readonly Route[] = [
       return (await removePasskey(env.DB, userId, params['id'] ?? ''))
         ? json(await getVault(env.DB, userId))
         : apiError(404, 'not_found', "That passkey isn't on this account.");
+    },
+  },
+  {
+    // LIB-02 + AUTH-08: uploaded files. Encrypted in the browser; the Worker stores ciphertext chunks in R2.
+    method: 'GET',
+    path: '/api/files',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ files: await listFiles(env.DB, userId, url.searchParams.get('course')), storage: Boolean(env.FILES) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/files',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      let body: unknown;
+      try {
+        body = await readJson(request);
+      } catch {
+        return apiError(400, 'invalid_json', "That request couldn't be read.");
+      }
+      const db = env.DB;
+      return fileCall(async () => json({ file: await createUpload(db, userId, body) }, 201));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/files/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const file = await getFile(env.DB, userId, params['id'] ?? '');
+      return file ? json({ file }) : apiError(404, 'not_found', "That file doesn't exist.");
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/files/:version/chunks/:n',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      const declared = Number(request.headers.get('Content-Length') ?? '0');
+      if (declared > CHUNK_BYTES + 1024) return apiError(413, 'too_large', 'That part is too large.');
+      const body = new Uint8Array(await request.arrayBuffer());
+      if (body.length > CHUNK_BYTES + 1024) return apiError(413, 'too_large', 'That part is too large.');
+      const db = env.DB;
+      const bucket = env.FILES;
+      return fileCall(async () => {
+        await putChunk(db, bucket, userId, params['version'] ?? '', chunkIndex(params['n']), body);
+        return json({ ok: true });
+      });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/files/:version/chunks/:n',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      const db = env.DB;
+      const bucket = env.FILES;
+      return fileCall(async () => {
+        const obj = await getChunk(db, bucket, userId, params['version'] ?? '', chunkIndex(params['n']));
+        // Ciphertext, so it's safe to cache privately in this browser; never shared caches.
+        return new Response(obj.body, {
+          headers: { ...API_SECURITY_HEADERS, 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, max-age=31536000, immutable' },
+        });
+      });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/files/:version/complete',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      if (!env.FILES) return needsFiles();
+      const db = env.DB;
+      const bucket = env.FILES;
+      return fileCall(async () => {
+        await completeUpload(db, bucket, userId, params['version'] ?? '');
+        return json({ ok: true });
+      });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/files/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await deleteFile(env.DB, userId, params['id'] ?? ''))
+        ? json({ deleted: true })
+        : apiError(404, 'not_found', "That file doesn't exist.");
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/files/:id/restore',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await restoreFile(env.DB, userId, params['id'] ?? ''))
+        ? json({ restored: true })
+        : apiError(404, 'not_found', "That file isn't in the trash.");
     },
   },
   {

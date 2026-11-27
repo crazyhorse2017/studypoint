@@ -164,7 +164,8 @@ def rule_server_only(files: Files) -> list[Violation]:
     v = _scan(files, "client-imports-worker", is_client, re.compile(r"""from\s+['"][^'"]*\bworker/"""),
               "Client code must not import from src/worker/.")
     v += _scan(files, "shared-impure", lambda p: p.startswith("src/shared/") and p.endswith((".ts", ".tsx")),
-               re.compile(r"""from\s+['"][^'"]*\b(worker|client)/|\bdocument\.|\bwindow\.|\benv\.(DB|FILES|VEC|AI|ASSETS)\b"""),
+               # `document.`/`window.` as DOM globals, not inside paths like 'word/document.xml'.
+               re.compile(r"""from\s+['"][^'"]*\b(worker|client)/|(?<![\w/])document\.|(?<![\w/])window\.|\benv\.(DB|FILES|VEC|AI|ASSETS)\b"""),
                "src/shared/ must stay pure: no DOM, no bindings, no client/worker imports.")
     return v
 
@@ -352,6 +353,7 @@ CLEAN: list[tuple[str, Files]] = [
     ("INSERT inside a trigger is not seed data", {"migrations/0001_init.sql":
         "CREATE TABLE p (t TEXT);\nCREATE TRIGGER p_ai AFTER INSERT ON p BEGIN\n  INSERT INTO p_fts(rowid, t) VALUES (new.rowid, new.t); END;"}),
     ("test address is allowed", {"src/worker/auth.ts": "const CI = 'ci@studypoint.invalid';"}),
+    ("a path containing document. is not DOM use", {"src/shared/sniff.ts": "const part = 'word/document.xml';"}),
     ("tokens file may hold hex", {"src/client/styles.css": ":root { --page: #fbf8f2; }"}),
     ("arrow function with a return type is fine", {"src/shared/a.ts": "export const f = (x: number): number => x;\ntype R = () => number;\nfunction g(): R { return () => 1; }"}),
     ("type-only import with 'as'", {"src/shared/a.ts": "import type { X as Y } from './b.ts';\nexport const n = 1 as number;"}),

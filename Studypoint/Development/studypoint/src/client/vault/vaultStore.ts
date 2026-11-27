@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../api.ts';
 import {
-  CryptoError, checkDataKey, createVault, importDataKey, unlockWithPasskey, unlockWithPassphrase, unlockWithRecoveryCode,
+  CryptoError, checkDataKey, createVault, deriveFingerprintKey, importDataKey, unlockWithPasskey, unlockWithPassphrase, unlockWithRecoveryCode,
   wrapForPasskey, wrapWithNewRecoveryCode, wrapWithPassphrase, type PasskeyWrap, type VaultRecord,
 } from '../../shared/crypto/vault.ts';
 import { clearSession, loadSession, saveSession } from './sessionKey.ts';
@@ -54,6 +54,15 @@ export function useVault(): VaultState {
 /** The unlocked data key for encrypting and decrypting content, or null while locked. */
 export function currentDataKey(): CryptoKey | null {
   return dataKey;
+}
+
+let fingerprintKey: CryptoKey | null = null;
+
+/** HMAC key for duplicate detection (LIB-11), derived from the data key; null while locked. */
+export async function currentFingerprintKey(): Promise<CryptoKey | null> {
+  if (!dataKeyRaw) return null;
+  fingerprintKey ??= await deriveFingerprintKey(dataKeyRaw);
+  return fingerprintKey;
 }
 
 /** Plain-language check used on the create and change screens. Null when acceptable. */
@@ -105,6 +114,7 @@ export function lock(): void {
   if (dataKeyRaw) dataKeyRaw.fill(0);
   dataKeyRaw = null;
   dataKey = null;
+  fingerprintKey = null;
   clearSession();
   stopIdleWatch();
   navigate('/', { replace: true });

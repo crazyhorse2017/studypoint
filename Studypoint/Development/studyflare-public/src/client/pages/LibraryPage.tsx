@@ -6,6 +6,7 @@ import { Button, ConfirmDialog, Menu, TextField, useToast } from '../ds/index.ts
 import { removeCourse, renameCourse, setArchived, useStudy, type Course } from '../studyStore.ts';
 import { AddCourse } from './AddCourse.tsx';
 import { NotesSection } from '../notes/NotesSection.tsx';
+import { FilesSection } from '../files/FilesSection.tsx';
 
 function CourseRow({ c }: { c: Course }) {
   const toast = useToast();
@@ -91,8 +92,9 @@ export function LibraryPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-[2.125rem] leading-tight font-semibold">Library</h1>
-        <p className="text-text-2">Your courses and notes. Uploading files (PDFs, slides, photos) comes next.</p>
+        <p className="text-text-2">Your courses, files and notes.</p>
       </div>
+      <FilesSection />
       <NotesSection />
       {!loaded ? <p className="text-text-2">Loading…</p> : null}
       {active.length > 0 ? (

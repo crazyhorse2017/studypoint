@@ -37,6 +37,9 @@
     }
   ],
   "vectorize": [{ "binding": "VEC", "index_name": "passages-v1" }],
+  // Step 2b (2026-11-26): uploaded files, ENCRYPTED in the browser and stored in 4 MiB chunks under
+  // files/<user>/<version>/<n>. Nightly backups also go here, under backups/.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "studypoint-files" }],
   "env": {
     // Preview: separate data everywhere (IMPLEMENTATION §2). Bindings and vars are not inherited, so all are repeated.
     "preview": {
