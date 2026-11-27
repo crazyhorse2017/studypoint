@@ -28,6 +28,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white">
   <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?logo=tailwindcss&logoColor=white">
+  <img alt="PureScript 0.15.17" src="https://img.shields.io/badge/PureScript-0.15.17-149eca">
   <img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white">
   <img alt="SQLite 3" src="https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite&logoColor=white">
   <img alt="Wrangler 4" src="https://img.shields.io/badge/Wrangler-4-f38020?logo=cloudflare&logoColor=white">
