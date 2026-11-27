@@ -7,6 +7,8 @@ import { unzipSync } from 'fflate';
 import { classifyPageText } from '../../shared/ocrClassify.ts';
 import { parseDocx, parsePptx } from '../reader/ooxml.ts';
 import { ocrImage } from './aiApi.ts';
+import { decryptText, encryptText } from '../../shared/crypto/vault.ts';
+import { currentDataKey } from '../vault/vaultStore.ts';
 
 export type Unit = { loc: string; page: number | null; text: string; ocr: boolean };
 export type Progress = (msg: string) => void;
@@ -39,51 +41,111 @@ async function imageForOcr(source: CanvasImageSource & { width: number; height: 
   return blobToDataUrl(blob);
 }
 
-async function pdfUnits(bytes: Uint8Array, progress: Progress): Promise<Unit[]> {
+// ---------------------------------------------------------------- OCR, resumable --
+// Processing runs in this tab, and OCR takes ~10 s a page. So each page's OCR text is remembered for the
+// rest of the tab session (ENCRYPTED with your data key, in sessionStorage, gone when the tab closes): if
+// the page is reloaded mid-way, processing picks up where it stopped instead of reading every page again.
+
+const OCR_PARALLEL = 3;
+const ocrItem = (cacheKey: string, part: string) => `sf.ocr.${cacheKey}.${part}`;
+
+async function cachedOcr(cacheKey: string, part: string, image: () => Promise<string>): Promise<string> {
+  const k = currentDataKey();
+  const item = ocrItem(cacheKey, part);
+  const aad = `ocr:${cacheKey}:${part}`;
+  if (k) {
+    const saved = sessionStorage.getItem(item);
+    if (saved) {
+      try {
+        return await decryptText(k, saved, aad);
+      } catch {
+        sessionStorage.removeItem(item);
+      }
+    }
+  }
+  const text = (await ocrImage(await image())).trim();
+  if (k) {
+    try {
+      sessionStorage.setItem(item, await encryptText(k, text, aad));
+    } catch {
+      // storage full: fine, it just won't resume
+    }
+  }
+  return text;
+}
+
+/** Run `fn` over items with at most `limit` running at once, keeping results in order. */
+async function inParallel<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      out[i] = await fn(items[i] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+async function pdfUnits(bytes: Uint8Array, progress: Progress, cacheKey: string): Promise<Unit[]> {
   const pdfjs = await import('pdfjs-dist');
   pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   const task = pdfjs.getDocument({ data: bytes.slice() });
   const doc = await task.promise;
-  const units: Unit[] = [];
-  let ocrUsed = 0;
   try {
+    // 1. The text layer of every page (fast, no AI).
+    const texts: string[] = [];
     for (let n = 1; n <= doc.numPages; n += 1) {
       progress(`Reading page ${n} of ${doc.numPages}`);
-      const page = await doc.getPage(n);
-      const content = await page.getTextContent();
+      const content = await (await doc.getPage(n)).getTextContent();
       let text = '';
-      for (const item of content.items) {
-        if ('str' in item) text += item.str + (item.hasEOL ? '\n' : ' ');
-      }
-      text = text.replace(/[ \t]+\n/g, '\n').trim();
-      if (classifyPageText(text).needsOcr && ocrUsed < MAX_OCR_PAGES) {
-        ocrUsed += 1;
-        progress(`Reading page ${n} with OCR`);
+      for (const item of content.items) if ('str' in item) text += item.str + (item.hasEOL ? '\n' : ' ');
+      texts.push(text.replace(/[ \t]+\n/g, '\n').trim());
+    }
+    // 2. OCR only the pages that need it, 3 at a time, resuming from this tab's cache.
+    const needOcr = texts.map((t, i) => (classifyPageText(t).needsOcr ? i + 1 : 0)).filter((n) => n > 0).slice(0, MAX_OCR_PAGES);
+    let done = 0;
+    const ocrTexts = await inParallel(needOcr, OCR_PARALLEL, async (n) => {
+      const text = await cachedOcr(cacheKey, `p${n}`, async () => {
+        const page = await doc.getPage(n);
         const base = page.getViewport({ scale: 1 });
         const viewport = page.getViewport({ scale: Math.min(2.5, 1600 / Math.max(base.width, base.height)) });
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
         await page.render({ canvas, viewport }).promise;
-        const ocrText = await ocrImage(await imageForOcr(canvas)).catch(() => '');
-        if (ocrText.trim().length > text.length) {
-          units.push({ loc: `p. ${n}`, page: n, text: ocrText.trim(), ocr: true });
-          continue;
-        }
-      }
-      if (text) units.push({ loc: `p. ${n}`, page: n, text, ocr: false });
-    }
+        return imageForOcr(canvas);
+      }).catch(() => '');
+      done += 1;
+      progress(`Reading scanned pages with OCR: ${done} of ${needOcr.length}`);
+      return text;
+    });
+    const ocrByPage = new Map(needOcr.map((n, i) => [n, ocrTexts[i] ?? '']));
+    const units: Unit[] = [];
+    texts.forEach((text, i) => {
+      const n = i + 1;
+      const ocr = ocrByPage.get(n);
+      if (ocr && ocr.length > text.length) units.push({ loc: `p. ${n}`, page: n, text: ocr, ocr: true });
+      else if (text) units.push({ loc: `p. ${n}`, page: n, text, ocr: false });
+    });
+    return units;
   } finally {
     void task.destroy();
   }
-  return units;
 }
 
-async function photoUnits(bytes: Uint8Array, mime: string): Promise<Unit[]> {
-  const bitmap = await createImageBitmap(new Blob([bytes.slice().buffer as ArrayBuffer], { type: mime }));
-  const text = await ocrImage(await imageForOcr(bitmap));
-  bitmap.close();
-  return text.trim() ? [{ loc: 'Photo', page: null, text: text.trim(), ocr: true }] : [];
+async function photoUnits(bytes: Uint8Array, mime: string, cacheKey: string): Promise<Unit[]> {
+  const text = await cachedOcr(cacheKey, 'photo', async () => {
+    const bitmap = await createImageBitmap(new Blob([bytes.slice().buffer as ArrayBuffer], { type: mime }));
+    try {
+      return await imageForOcr(bitmap);
+    } finally {
+      bitmap.close();
+    }
+  });
+  return text ? [{ loc: 'Photo', page: null, text, ocr: true }] : [];
 }
 
 /** Split Markdown (and web pages saved as Markdown) into sections by heading. */
@@ -140,11 +202,12 @@ function pptxUnits(bytes: Uint8Array): Unit[] {
     .filter((u) => u.text.trim());
 }
 
-export async function fileUnits(kind: string, mime: string, bytes: Uint8Array, progress: Progress): Promise<Unit[]> {
-  if (kind === 'pdf') return pdfUnits(bytes, progress);
+/** `cacheKey` identifies this exact version of the file (its version id), for resuming OCR. */
+export async function fileUnits(kind: string, mime: string, bytes: Uint8Array, progress: Progress, cacheKey: string): Promise<Unit[]> {
+  if (kind === 'pdf') return pdfUnits(bytes, progress, cacheKey);
   if (kind === 'image') {
     progress('Reading the photo with OCR');
-    return photoUnits(bytes, mime);
+    return photoUnits(bytes, mime, cacheKey);
   }
   if (kind === 'docx') return docxUnits(bytes);
   if (kind === 'pptx') return pptxUnits(bytes);

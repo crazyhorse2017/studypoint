@@ -71,7 +71,11 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
           </Button>
         ) : null}
       </div>
-      {line ? <p className="text-sm text-text-2" aria-live="polite">{line}</p> : null}
+      {line ? (
+        <p className="text-sm text-text-2" aria-live="polite">
+          {line}. <strong className="text-text">Keep this tab open</strong> (other pages of Studyflare are fine). If it reloads, press Process again: pages already read are remembered.
+        </p>
+      ) : null}
       {errors.length ? (
         <ul className="text-sm text-danger">
           {errors.map((e) => <li key={e}>{e}</li>)}

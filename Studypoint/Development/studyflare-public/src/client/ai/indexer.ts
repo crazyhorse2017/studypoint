@@ -65,7 +65,7 @@ export async function staleSources(courseId: string): Promise<{ all: SourceRef[]
 export async function processSource(s: SourceRef, progress: Progress = () => undefined): Promise<number> {
   progress(`Opening ${s.title}`);
   const units = s.kind === 'file'
-    ? await fileUnits(s.file.kind, s.file.mime, await openFile(s.file), progress)
+    ? await fileUnits(s.file.kind, s.file.mime, await openFile(s.file), progress, s.file.versionId)
     : noteUnits((await loadNote(s.id)).doc as Parameters<typeof noteUnits>[0]);
   const passages: IndexedPassage[] = [];
   for (const u of units) {
