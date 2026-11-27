@@ -42,7 +42,7 @@ async function imageForOcr(source: CanvasImageSource & { width: number; height: 
 }
 
 // ---------------------------------------------------------------- OCR, resumable --
-// Processing runs in this tab, and OCR takes ~10 s a page. So each page's OCR text is remembered for the
+// Processing runs in this tab, and OCR takes seconds a page (more when Workers AI is busy). So each page's OCR text is remembered for the
 // rest of the tab session (ENCRYPTED with your data key, in sessionStorage, gone when the tab closes): if
 // the page is reloaded mid-way, processing picks up where it stopped instead of reading every page again.
 
@@ -206,7 +206,7 @@ function pptxUnits(bytes: Uint8Array): Unit[] {
 export async function fileUnits(kind: string, mime: string, bytes: Uint8Array, progress: Progress, cacheKey: string): Promise<Unit[]> {
   if (kind === 'pdf') return pdfUnits(bytes, progress, cacheKey);
   if (kind === 'image') {
-    progress('Reading the photo with OCR (this can take a minute)');
+    progress('Reading the photo with OCR');
     return photoUnits(bytes, mime, cacheKey);
   }
   if (kind === 'docx') return docxUnits(bytes);

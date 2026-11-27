@@ -14,7 +14,7 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
   const [running, setRunning] = useState(false);
   const [line, setLine] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
-  // Live elapsed time: OCR of one page takes up to ~90 s on the free models, so show that it's working.
+  // Live elapsed time: OCR of one page takes seconds, longer when Workers AI is busy, so show that it's working.
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -85,7 +85,7 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
         <div className="flex flex-col gap-1 text-sm text-text-2">
           <p aria-live="polite">{line}</p>
           <p>
-            Working for {startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0} s. Reading a photo or scanned page with OCR takes <strong className="text-text">up to about 1½ minutes per page</strong>; typed PDFs, slides and notes take seconds.{' '}
+            Working for {startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0} s. Reading a photo or scanned page with OCR usually takes <strong className="text-text">5 to 30 seconds per page</strong>; typed PDFs, slides and notes take seconds.{' '}
             <strong className="text-text">Keep this tab open</strong> (other Studyflare pages are fine). If it does reload, press Process again: pages already read are remembered.
           </p>
         </div>

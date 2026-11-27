@@ -24,7 +24,7 @@
     "ACCESS_TEAM_DOMAIN": "todo",
     "ACCESS_AUD": "todo",
     // Which Workers AI model does each task. Runs on the free daily allowance; switch to larger models on Workers Paid.
-    "AI_MODELS": "{\"answer\":\"@cf/openai/gpt-oss-120b\",\"generate\":\"@cf/openai/gpt-oss-120b\",\"validate\":\"@cf/openai/gpt-oss-20b\",\"grade\":\"@cf/openai/gpt-oss-20b\",\"embed\":\"@cf/baai/bge-m3\",\"ocr\":\"@cf/meta/llama-4-scout-17b-16e-instruct\"}"
+    "AI_MODELS": "{\"answer\":\"@cf/openai/gpt-oss-120b\",\"generate\":\"@cf/openai/gpt-oss-120b\",\"validate\":\"@cf/openai/gpt-oss-20b\",\"grade\":\"@cf/openai/gpt-oss-20b\",\"embed\":\"@cf/baai/bge-m3\",\"ocr\":\"@cf/mistralai/mistral-small-3.1-24b-instruct\"}"
   },
   "ai": { "binding": "AI" },
   // No database_id: the first deploy creates the database, and the deploy script applies migrations.
