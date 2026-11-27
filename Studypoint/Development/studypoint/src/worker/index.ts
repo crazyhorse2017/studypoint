@@ -5,7 +5,7 @@
 import { APP_VERSION, createApp, type Env } from './app.ts';
 import { createAccessVerifier } from './auth/accessJwt.ts';
 import { runNightlyBackup } from './backup/d1.ts';
-import { owners } from './people.ts';
+import { owners } from './owners.ts';
 import { ensureUser } from './users.ts';
 
 const app = createApp({

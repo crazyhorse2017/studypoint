@@ -24,7 +24,14 @@
     }
   },
   "dependencies": {
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-mathematics": "3.35.0",
+    "@tiptap/extensions": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/react": "3.35.0",
+    "@tiptap/starter-kit": "3.35.0",
     "jose": "6.2.18",
+    "katex": "0.18.11",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

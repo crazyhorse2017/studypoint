@@ -58,4 +58,4 @@ Everything runs in **your** Cloudflare account: the Worker, the D1 database and 
 
 ## Adding people
 
-Open **Settings → People** to let someone else in. Each person gets a separate, empty account and never sees yours. Every change asks for a Cloudflare token, which is used once and then discarded.
+Studyflare is one person per copy. To share it, send someone this page: they click **Deploy to Cloudflare** and get their own private Studyflare in their own account. Nothing is shared between copies.

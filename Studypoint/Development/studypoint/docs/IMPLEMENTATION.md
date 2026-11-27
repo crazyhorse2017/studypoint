@@ -40,18 +40,16 @@ This doc covers **how** and **in what order** Studyflare gets built: environment
 - **Secrets on the `studyflare` Worker:**
   - `ALLOWED_EMAILS`: built-in sign-in emails (the owner's).
   - `OWNER_EMAILS`: emails that open the owner's account.
-  - `CF_ACCESS_API_TOKEN`: a Cloudflare API token limited to "Access: Apps and Policies → Edit", used by Settings → People.
+  - *(`CF_ACCESS_API_TOKEN` was deleted on 2026-11-26 along with Settings → People, A21. Alex can also revoke that token under My Profile → API Tokens.)*
 - **Sign-in (T0.07):**
   - Cloudflare Access app "Studyflare" (Zero Trust team `shrill-hat-b870.cloudflareaccess.com`, shared with NoteFlare).
-  - 30-day sessions, and the "Studyflare people" policy: Alex's two emails plus everyone invited in Settings → People.
+  - 30-day sessions, and the "Studyflare owner" policy: Alex's two emails only. The one invited friend was removed when People was removed; she never signed in, so no account was deleted.
   - The old `studypoint` Worker is now only a 301 redirect to studyflare (no bindings, no cron). It stays behind the same Access app, so the redirect happens after sign-in.
-  - First invite (2026-11-26): one friend's email, added to `allowed_emails` and the policy directly, since `CF_ACCESS_API_TOKEN` wasn't set yet.
   - Login methods (2026-11-26): **Passkeys** (Access built-in identity provider `89b2b103…`) and **email PIN**. With two methods there's a chooser page instead of an auto-redirect.
   - Passkeys are registered from the sign-in page after verifying by PIN, and managed under "Manage passkeys".
   - **Verified 2026-11-26 by Alex:** a passkey sign-in token carries the email claim. The app's `ALLOWED_EMAILS` check passes, and Settings shows "Signed in as …".
   - Because the Zero Trust org is shared, NoteFlare (which accepts all login methods) also shows the passkey option.
-  - The app re-checks owners from the `ALLOWED_EMAILS` / `OWNER_EMAILS` secrets, and invited people from the `allowed_emails` table.
-  - To add or remove an invited person, use Settings → People (it updates the table and the Access policy together). Owner emails still need both the policy and the secrets changed.
+  - The app re-checks every request against the `ALLOWED_EMAILS` secret. To change who can sign in, change both the Access policy and the secret.
 - **Storage (T0.05 part 1):** D1 `studypoint-db` / `studypoint-preview` and Vectorize `passages-v1` / `passages-preview`, with IDs in `wrangler.jsonc`.
   - `0001_init.sql` was applied through the D1 API and recorded in `d1_migrations` (the same table wrangler uses), so `wrangler d1 migrations apply` will continue from 0002.
   - **Deploy command (since 2026-11-26):** `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`. New migrations apply before the new Worker goes live. The first run reported "No migrations to apply", which confirms 0001 is recorded.
@@ -93,6 +91,11 @@ Workers Paid is needed before P1 ingestion, not before P0.
 - **TypeScript is pinned to 6.0.3, not 7.x.** TypeScript 7 is the native-Go compiler. It ships platform binaries and no `lib/typescript.js`, so it can't run inside the browser-based local type check. Its unsigned binaries would also be blocked by Smart App Control. CI and the local check use the same 6.0.3.
 - **Vitest must stay on 4.x** (4.1.12 when added). `@cloudflare/vitest-pool-workers` 0.23 requires `vitest ^4.1`, but Vitest's latest is 5.x.
 - jose 6.2.18 (MIT, no dependencies), added in T0.12 for Access JWT verification.
+- **Notes editor (T1.23, 2026-11-26):**
+  - **Packages:** `@tiptap/react`, `@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extensions` and `@tiptap/extension-mathematics`, all at 3.35.0 (MIT, ProseMirror underneath, also MIT), plus `katex` 0.18.11 (MIT; 0.19 is outside the math extension's peer range).
+  - **Why:** Alex chose rich text with a toolbar and math (`LIB-08`). Tiptap is the most used ProseMirror toolkit, with accessible contenteditable, keyboard shortcuts and undo built in. Writing that by hand would be weeks of edge cases. KaTeX outputs MathML for screen readers (AGENTS 19).
+  - **Bundle:** the editor is lazy-loaded only on `/notes/:id`.
+  - **Typecheck:** `tests/typecheck.py` follows these packages' dependency trees automatically (`RECURSIVE`).
 - **Lockfile:** there's no local npm. Run the `Generate lockfile` workflow once (Actions tab), then upload its `package-lock.json`. Until then, CI uses `npm install` with the exact pins.
 
 Rules:

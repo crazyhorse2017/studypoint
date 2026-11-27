@@ -212,10 +212,9 @@ def _():
     tables = [t for t, _ in export_tables()]
     db = fresh_db()
     real = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
-    # System tables are not part of a person's export: backups log, schema version, and the app-wide
-    # sign-in list (allowed_emails, AUTH-06) and setup values (app_config, AUTH-07), which belong to the
-    # deployment, not to one user's study data.
-    expected = {t for t in real if not t.startswith("passages_fts")} - {"backups", "schema_meta", "allowed_emails", "app_config"}
+    # System tables are not part of a person's export: backups log, schema version, and setup values
+    # (app_config, AUTH-07), which belong to the deployment, not to one user's study data.
+    expected = {t for t in real if not t.startswith("passages_fts")} - {"backups", "schema_meta", "app_config"}
     assert set(tables) == expected, f"missing: {sorted(expected - set(tables))}; extra: {sorted(set(tables) - expected)}"
     pos = {t: i for i, t in enumerate(tables)}
     for t in tables:
@@ -357,6 +356,30 @@ def _():
     db.execute(sql, ("u1", "midnight", "system", '{"sizePct":130}', 6))
     rows = db.execute("SELECT style, theme, reading_json, updated_at FROM settings").fetchall()
     assert rows == [("midnight", "system", '{"sizePct":130}', 6)], rows
+
+
+@check("worker SQL compiles against the schema (notes, vault, courses, settings, setup)")
+def _():
+    """EXPLAIN every SQL string in these Worker modules: catches table/column typos without D1."""
+    db = fresh_db()
+    checked = 0
+    for name in ("notes.ts", "vault.ts", "courses.ts", "settings.ts", "setup/config.ts"):
+        src = (ROOT / "src" / "worker" / name).read_text(encoding="utf-8")
+        consts = {m.group(1): m.group(2) for m in re.finditer(r"const (\w+) = `([^`]*)`;", src, re.S)}
+        for m in re.finditer(r"(['`])((?:SELECT|INSERT|UPDATE|DELETE)\b.*?)\1", src, re.S):
+            sql = m.group(2)
+            for k, v in consts.items():
+                sql = sql.replace("${" + k + "}", v)
+            if "${" in sql:
+                continue  # dynamic column lists are covered by their own tests
+            numbered = [int(n) for n in re.findall(r"\?(\d+)", sql)]
+            params = max(numbered) if numbered else sql.count("?")
+            try:
+                db.execute("EXPLAIN " + sql, (None,) * params)
+            except sqlite3.Error as e:
+                raise AssertionError(f"{name}: {e}\n  {sql.strip()[:160]}")
+            checked += 1
+    assert checked >= 20, f"only {checked} statements found; the extractor may be broken"
 
 
 def main() -> int:

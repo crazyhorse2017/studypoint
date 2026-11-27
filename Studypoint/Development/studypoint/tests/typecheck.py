@@ -55,9 +55,20 @@ TYPE_PACKAGES = [
     "@cloudflare/workers-types",
     "vite",
     "jose",
+    "@tiptap/core",
+    "@tiptap/pm",
+    "@tiptap/react",
+    "@tiptap/starter-kit",
+    "@tiptap/extensions",
+    "@tiptap/extension-mathematics",
+    "katex",
 ]
 # Transitive type-only dependencies (resolved from the dependent package's package.json).
 TRANSITIVE = {"@types/react": ["csstype"]}
+# Packages whose whole dependency tree is needed for types (the editor: Tiptap re-exports ProseMirror
+# types, and each StarterKit extension is its own package). Followed recursively; react is already present.
+RECURSIVE = {"@tiptap/react", "@tiptap/pm", "@tiptap/starter-kit", "@tiptap/extension-mathematics", "@tiptap/extensions"}
+SKIP_RECURSIVE = {"react", "react-dom", "@types/react", "@types/react-dom", "@tiptap/core", "@tiptap/pm", "katex", "commander"}
 
 
 def _load_compiler_options() -> dict:
@@ -170,6 +181,16 @@ def ensure_packages(refresh: bool) -> None:
         pkg = _install(name, ranges.get(name))
         for dep in TRANSITIVE.get(name, []):
             _install(dep, (pkg.get("dependencies") or {}).get(dep))
+    # Follow the editor packages' dependency trees (deps only; peers are the packages listed above).
+    queue = [(n, json.loads((MODULES / n / "package.json").read_text(encoding="utf-8"))) for n in RECURSIVE]
+    seen = set(RECURSIVE)
+    while queue:
+        _, pkg = queue.pop()
+        for dep, rng in (pkg.get("dependencies") or {}).items():
+            if dep in seen or dep in SKIP_RECURSIVE:
+                continue
+            seen.add(dep)
+            queue.append((dep, _install(dep, rng)))
 
 
 # ------------------------------------------------------------ virtual FS build --

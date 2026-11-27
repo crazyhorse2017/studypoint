@@ -74,7 +74,7 @@ export function register(test: TestFn, assert: Assert): void {
     const stored = { team_domain: 'me.cloudflareaccess.com', aud: 'stored-aud', account_id: 'a', app_id: 'b', policy_id: 'c' };
     const merged = effectiveEnv({ ACCESS_TEAM_DOMAIN: 'todo', ACCESS_AUD: 'todo' }, stored);
     assert.equal(merged.ACCESS_AUD, 'stored-aud');
-    assert.equal(merged.ACCESS_POLICY_ID, 'c');
+    assert.equal(merged.ACCESS_TEAM_DOMAIN, 'me.cloudflareaccess.com');
     assert.ok(!needsSetup(merged));
     const pinned = effectiveEnv({ ACCESS_TEAM_DOMAIN: 'x.cloudflareaccess.com', ACCESS_AUD: 'wrangler-aud' }, stored);
     assert.equal(pinned.ACCESS_AUD, 'wrangler-aud');

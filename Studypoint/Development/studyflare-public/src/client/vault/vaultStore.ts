@@ -10,6 +10,7 @@ import {
 } from '../../shared/crypto/vault.ts';
 import { clearSession, loadSession, saveSession } from './sessionKey.ts';
 import { registerUnlockPasskey, unlockSecret } from './passkey.ts';
+import { navigate } from '../router.ts';
 
 export type PasskeyInfo = PasskeyWrap & { label: string; createdAt: number; lastUsedAt: number | null };
 type VaultResponse = { vault: VaultRecord | null; passkeys: PasskeyInfo[] };
@@ -86,20 +87,27 @@ function stopIdleWatch(): void {
 
 // ---------- transitions ----------
 
-async function becomeUnlocked(raw: Uint8Array, patch: Partial<VaultState> = {}): Promise<void> {
+/**
+ * `restored` = the tab was already unlocked and was just reloaded: stay on the same page. Any real
+ * unlock (passphrase, passkey, recovery code, new passphrase) starts on the homepage.
+ */
+async function becomeUnlocked(raw: Uint8Array, patch: Partial<VaultState> = {}, restored = false): Promise<void> {
   dataKeyRaw = raw;
   dataKey = await importDataKey(raw);
   await saveSession(raw);
   startIdleWatch();
+  if (!restored) navigate('/', { replace: true });
   set({ status: 'unlocked', error: null, ...patch });
 }
 
+/** Locks and returns to the homepage, so the page that was open isn't where the next unlock lands. */
 export function lock(): void {
   if (dataKeyRaw) dataKeyRaw.fill(0);
   dataKeyRaw = null;
   dataKey = null;
   clearSession();
   stopIdleWatch();
+  navigate('/', { replace: true });
   if (state.record) set({ status: 'locked', pendingRecoveryCode: null });
 }
 
@@ -120,7 +128,7 @@ export async function initVault(): Promise<void> {
   const saved = await loadSession();
   if (saved) {
     try {
-      await becomeUnlocked(await checkDataKey(res.vault, saved));
+      await becomeUnlocked(await checkDataKey(res.vault, saved), {}, true);
       return;
     } catch {
       clearSession();

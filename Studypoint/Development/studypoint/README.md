@@ -1,6 +1,6 @@
 # Studyflare
 
-An AI-assisted study platform (one owner plus invited people, each with a separate account): a library of your own course materials, a grounded assistant that cites its sources, and FSRS flashcards.
+An AI-assisted study platform (one owner per deployment, with end-to-end encrypted notes): a library of your own course materials, a grounded assistant that cites its sources, and FSRS flashcards.
 It runs on Cloudflare Workers, D1, R2, Vectorize and Workers AI, behind Cloudflare Access.
 
 - **Rules for contributors and agents:** [AGENTS.md](AGENTS.md)

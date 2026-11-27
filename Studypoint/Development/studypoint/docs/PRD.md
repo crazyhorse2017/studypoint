@@ -18,7 +18,7 @@ General-purpose AI tools answer confidently without saying where an answer came 
 Studyflare is one place where the material lives, where every AI answer is traceable to a page, and where review is scheduled by evidence-based algorithms instead of guesswork.
 
 ## 2. User
-Primarily one user, Alex, a UMBC Mechanical Engineering student, who can invite a few people (`AUTH-06`). Each invited person gets a separate account. There's no sharing between accounts.
+One user per deployment: Alex, a UMBC Mechanical Engineering student. Anyone else runs their own copy with the Deploy button (`AUTH-07`). There's no sharing between deployments.
 - Math-heavy engineering courses. **Which courses changes every semester, so the app assumes none** (`LIB-12`).
 - Studies mostly on a laptop or desktop.
 - Already keeps class notes in Obsidian.
@@ -73,13 +73,8 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   - A passkey can only be registered after verifying the email by PIN, and the same email allowlist applies to both methods.
 - **AUTH-02 MUST** — The Worker verifies the `Cf-Access-Jwt-Assertion` JWT on every API request: signature against the team certs, plus `iss` and `aud`. It never trusts the email header alone.
 - **AUTH-03 MUST** — After verification, the email must also be on the `ALLOWED_EMAILS` list (school and personal address). The list is a Worker variable or secret and is never committed.
-- **AUTH-03b MUST** — **One person, several logins.** The owner's emails (`OWNER_EMAILS` secret: Alex's school and personal addresses) all sign in to the **same** owner account. **Every other allowed email gets its own separate, empty account** and never sees the owner's data. Stored in `user_emails`. CI and dev identities stay separate. *(Changed 2026-11-26: before, every allowed email opened the owner account.)*
-- **AUTH-06 MUST** — **People.** Owners add or remove sign-in emails in Settings → People.
-  - The list lives in `allowed_emails` (migration 0002).
-  - Each change also updates the Cloudflare Access policy through a token scoped to Access edits. If Cloudflare refuses, the change is rolled back, so the two lists can't drift apart.
-  - Built-in owner emails can't be removed there.
-  - Removing someone blocks them immediately at the app check, even if their Access session hasn't expired. Their data is kept.
-  - *(2026-11-26)* If no `CF_ACCESS_API_TOKEN` secret is set, each add or remove asks for a Cloudflare token pasted on the page. It's used for that one change and never stored.
+- **AUTH-03b MUST** — **One person, several logins.** The owner's emails (`OWNER_EMAILS`, or `ALLOWED_EMAILS` when that isn't set: Alex's school and personal addresses) all sign in to the **same** owner account. Stored in `user_emails`. CI and dev identities stay separate.
+- ~~**AUTH-06** People~~ — **Removed 2026-11-26 (ARCHITECTURE A21).** The in-app invite list (Settings → People) is gone. Anyone else runs their own Studyflare with the Deploy button (`AUTH-07`), which keeps everyone's data in their own Cloudflare account. Migration 0005 drops `allowed_emails`.
 - **AUTH-07 MUST** — **One-click deploy, like NoteFlare** *(added 2026-11-26)*. Anyone can run their own private Studyflare from a "Deploy to Cloudflare" button on the public, app-only repo (`crazyhorse2017/studyflare`).
   - The deploy page asks for just one thing: `ALLOWED_EMAILS`. Those emails own the app (`OWNER_EMAILS` is optional).
   - On first open, a setup page asks for a one-time Cloudflare API token. It creates the Zero Trust org if needed, email-PIN login, the Access app and an allow policy for exactly `ALLOWED_EMAILS`, and stores the ids in `app_config`. The token is never stored.
@@ -114,7 +109,8 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
 - **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).
-  - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links), and typing `$…$` renders math inline. The note is still saved as Markdown, so exports stay clean.
+  - *(2026-11-26)* The editor is **rich text with a toolbar** (headings, bold, lists, links), and typing `$…$` renders math inline. The toolbar adds inline math or a display equation; clicking any math edits it with a live preview.
+  - **Storage:** the title and body are **encrypted in the browser** (`AUTH-08`). The body is the editor's own JSON document, which is lossless with math included. Markdown is generated from it in the browser for export (`EXP-03`) and for the AI, because the server only has ciphertext. Saved automatically about a second after typing stops. A save from an out-of-date tab is refused, not merged.
 - **LIB-09 MUST** — Studied-tracking per source, at the level of pages or sections: unread, read, or reviewed. It is updated automatically by reading and review, and can be overridden by hand.
 - **LIB-10 MUST** — Re-importing or editing a source creates a new **version**.
   Cards and questions linked to changed or removed passages are flagged "source changed" (`SRC-01`).

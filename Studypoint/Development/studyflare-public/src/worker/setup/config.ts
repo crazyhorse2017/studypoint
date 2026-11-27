@@ -3,7 +3,6 @@
 // so a hand-configured deployment never reads the table.
 
 import type { AuthEnv } from '../auth/policy.ts';
-import type { PeopleEnv } from '../people.ts';
 
 export type ConfigKey = 'team_domain' | 'aud' | 'account_id' | 'app_id' | 'policy_id' | 'brand_app_id' | 'setup_at';
 export type StoredConfig = Partial<Record<ConfigKey, string>>;
@@ -33,7 +32,7 @@ export async function writeStoredConfig(db: D1Database, values: StoredConfig, no
   if (stmts.length > 0) await db.batch(stmts);
 }
 
-type ConfigurableEnv = AuthEnv & PeopleEnv;
+type ConfigurableEnv = AuthEnv;
 
 /** The env the rest of the app sees: wrangler values first, stored setup values where wrangler says "todo". */
 export function effectiveEnv<E extends ConfigurableEnv>(env: E, stored: StoredConfig): E {
@@ -42,9 +41,6 @@ export function effectiveEnv<E extends ConfigurableEnv>(env: E, stored: StoredCo
     ...env,
     ACCESS_TEAM_DOMAIN: pick(env.ACCESS_TEAM_DOMAIN, stored.team_domain),
     ACCESS_AUD: pick(env.ACCESS_AUD, stored.aud),
-    CF_ACCOUNT_ID: pick(env.CF_ACCOUNT_ID, stored.account_id),
-    ACCESS_APP_ID: pick(env.ACCESS_APP_ID, stored.app_id),
-    ACCESS_POLICY_ID: pick(env.ACCESS_POLICY_ID, stored.policy_id),
   };
 }
 

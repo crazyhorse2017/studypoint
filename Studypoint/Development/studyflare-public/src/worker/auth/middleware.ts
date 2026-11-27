@@ -27,10 +27,7 @@ export function extractAccessToken(request: Request): string | null {
   return accessTokenFromCookie(request.headers.get('Cookie'));
 }
 
-/** Extra allowlist lookup (people invited from Settings → People, AUTH-06). Only consulted for VERIFIED emails. */
-export type InvitedCheck = (email: string) => Promise<boolean>;
-
-export async function authenticate(request: Request, config: AuthConfig, verify: TokenVerifier, isInvited?: InvitedCheck): Promise<AuthDecision> {
+export async function authenticate(request: Request, config: AuthConfig, verify: TokenVerifier): Promise<AuthDecision> {
   const problem = configProblem(config);
   if (problem) return problem;
 
@@ -48,14 +45,5 @@ export async function authenticate(request: Request, config: AuthConfig, verify:
     // Never echo verifier details (they can include token fragments).
     return { ok: false, status: 401, code: 'invalid_token', message: 'Your sign-in has expired or is invalid. Reload to sign in again.' };
   }
-  const decision = decideFromClaims(config, claims);
-  if (!decision.ok && decision.code === 'not_allowed' && isInvited && typeof claims.email === 'string' && claims.email.includes('@')) {
-    const email = claims.email.trim().toLowerCase();
-    try {
-      if (await isInvited(email)) return { ok: true, identity: { email, via: 'access' } };
-    } catch {
-      // Lookup failure must fail closed.
-    }
-  }
-  return decision;
+  return decideFromClaims(config, claims);
 }

@@ -10,10 +10,11 @@ import { getAppearance, patchAppearance } from './settings.ts';
 import { DuplicateCourse, createCourse, deleteCourse, getHomeSchool, listCourses, setHomeSchool, updateCourse } from './courses.ts';
 import { validateCourse, validateSchool } from '../shared/courses.ts';
 import { matchPath, type RouteParams } from '../shared/routeMatch.ts';
-import { PeopleError, addPerson, hasStoredToken, isInvited, isOwner, listPeople, normaliseEmail, removePerson, type PeopleEnv } from './people.ts';
+import { isOwner } from './owners.ts';
 import { parseAllowedEmails } from './auth/policy.ts';
-import { effectiveEnv, isPlaceholder, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
+import { effectiveEnv, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
 import { SetupError, runSetup } from './setup/cloudflare.ts';
+import { MAX_NOTE_BODY_CHARS, NoteError, createNote, deleteNote, getNote, listNotes, restoreNote, updateNote } from './notes.ts';
 import { VaultError, addPasskey, createVaultRow, getVault, markPasskeyUsed, removePasskey, updateVaultRow } from './vault.ts';
 
 /** Runs a vault operation, turning VaultError into its HTTP answer. */
@@ -26,7 +27,7 @@ async function vaultCall(fn: () => Promise<Response>): Promise<Response> {
   }
 }
 
-/** An optional one-time Cloudflare token sent with a People change (never stored). */
+/** The one-time Cloudflare token sent to first-run setup (never stored). */
 function tokenFrom(body: unknown): string | undefined {
   const t = (body as Record<string, unknown> | null)?.['token'];
   return typeof t === 'string' && t.trim() !== '' ? t.trim() : undefined;
@@ -35,15 +36,27 @@ function tokenFrom(body: unknown): string | undefined {
 /** Small JSON bodies only (settings and similar). Imports have their own path. */
 const MAX_JSON_BYTES = 64 * 1024;
 
-async function readJson(request: Request): Promise<unknown> {
+async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
   const text = await request.text();
-  if (text.length > MAX_JSON_BYTES) throw new SyntaxError('Body too large');
+  if (text.length > maxBytes) throw new SyntaxError('Body too large');
   return JSON.parse(text);
+}
+
+/** Note bodies are larger than settings-sized JSON: the body limit plus room for the other fields. */
+const MAX_NOTE_JSON = MAX_NOTE_BODY_CHARS + 16 * 1024;
+
+async function noteCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof NoteError) return apiError(err.status, 'note_error', err.message);
+    throw err;
+  }
 }
 
 export const APP_VERSION = '0.1.0';
 
-export type Env = AuthEnv & PeopleEnv & {
+export type Env = AuthEnv & {
   ASSETS: Fetcher;
   /** D1, R2 and the rest are bound in T0.05; routes that need them answer 503 until then. */
   DB?: D1Database;
@@ -81,61 +94,6 @@ export const ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/api/me',
     handler: ({ identity, env }) => json({ email: identity.email, via: identity.via, owner: identity.via === 'access' && isOwner(env, identity.email) }),
-  },
-  {
-    // AUTH-06: People (owners only). Adding/removing keeps the app list and Cloudflare Access in sync.
-    method: 'GET',
-    path: '/api/people',
-    handler: async ({ env, identity }) => {
-      if (!env.DB) return needsDb();
-      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
-      return json({ people: await listPeople(env.DB, env), tokenStored: hasStoredToken(env) });
-    },
-  },
-  {
-    method: 'POST',
-    path: '/api/people',
-    handler: async ({ request, env, identity, userId }) => {
-      if (!env.DB || !userId) return needsDb();
-      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
-      let body: unknown;
-      try {
-        body = await readJson(request);
-      } catch {
-        return apiError(400, 'invalid_json', "That request couldn't be read.");
-      }
-      const email = normaliseEmail((body as Record<string, unknown> | null)?.['email']);
-      if (!email) return apiError(400, 'invalid_email', 'Enter a full email address, like name@example.com.');
-      try {
-        return json({ people: await addPerson(env.DB, env, email, userId, Date.now(), undefined, tokenFrom(body)) }, 201);
-      } catch (err) {
-        if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
-        throw err;
-      }
-    },
-  },
-  {
-    method: 'DELETE',
-    path: '/api/people/:email',
-    handler: async ({ request, env, identity, params }) => {
-      if (!env.DB) return needsDb();
-      if (!isOwner(env, identity.email)) return apiError(403, 'owners_only', 'Only the owner can manage who can sign in.');
-      const email = normaliseEmail(params['email']);
-      if (!email) return apiError(400, 'invalid_email', "That isn't a valid email.");
-      let body: unknown = null;
-      try {
-        const text = await request.text();
-        body = text.trim() === '' || text.length > MAX_JSON_BYTES ? null : JSON.parse(text);
-      } catch {
-        body = null;
-      }
-      try {
-        return json({ people: await removePerson(env.DB, env, email, undefined, tokenFrom(body)) });
-      } catch (err) {
-        if (err instanceof PeopleError) return apiError(err.status, 'people_error', err.message);
-        throw err;
-      }
-    },
   },
   {
     // AUTH-08: the encryption vault (wrapped keys only; the Worker can't unlock anything).
@@ -217,6 +175,74 @@ export const ROUTES: readonly Route[] = [
       return (await removePasskey(env.DB, userId, params['id'] ?? ''))
         ? json(await getVault(env.DB, userId))
         : apiError(404, 'not_found', "That passkey isn't on this account.");
+    },
+  },
+  {
+    // LIB-08 + AUTH-08: typed notes. Title and body are ciphertext; the Worker refuses plaintext.
+    method: 'GET',
+    path: '/api/notes',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ notes: await listNotes(env.DB, userId, url.searchParams.get('course')) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/notes',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request, MAX_NOTE_JSON);
+      } catch {
+        return apiError(413, 'invalid_json', "That note couldn't be read. It may be too long.");
+      }
+      const db = env.DB;
+      return noteCall(async () => json({ note: await createNote(db, userId, body) }, 201));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/notes/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const note = await getNote(env.DB, userId, params['id'] ?? '');
+      return note ? json({ note }) : apiError(404, 'not_found', "That note doesn't exist.");
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/notes/:id',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      let body: unknown;
+      try {
+        body = await readJson(request, MAX_NOTE_JSON);
+      } catch {
+        return apiError(413, 'invalid_json', "That note couldn't be read. It may be too long.");
+      }
+      const db = env.DB;
+      return noteCall(async () => json({ note: await updateNote(db, userId, params['id'] ?? '', body) }));
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/notes/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await deleteNote(env.DB, userId, params['id'] ?? ''))
+        ? json({ deleted: true })
+        : apiError(404, 'not_found', "That note doesn't exist.");
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/notes/:id/restore',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await restoreNote(env.DB, userId, params['id'] ?? ''))
+        ? json({ restored: true })
+        : apiError(404, 'not_found', "That note isn't in the trash.");
     },
   },
   {
@@ -377,7 +403,7 @@ const NO_VERIFIER: TokenVerifier = async () => {
 
 /** Wrangler values, with first-run setup values filled in where wrangler says "todo" (AUTH-07). */
 async function resolveEnv(env: Env): Promise<Env> {
-  if (!env.DB || (!needsSetup(env) && !isPlaceholder(env.ACCESS_APP_ID))) return env;
+  if (!env.DB || !needsSetup(env)) return env;
   let stored: StoredConfig = {};
   try {
     stored = await readStoredConfig(env.DB);
@@ -429,8 +455,7 @@ export function createApp(deps: AppDeps) {
     }
     const verifier = config.issuer && config.aud ? deps.makeVerifier(config) : NO_VERIFIER;
 
-    const db = env.DB;
-    const auth = await authenticate(request, config, verifier, db ? (email) => isInvited(db, email) : undefined);
+    const auth = await authenticate(request, config, verifier);
     if (!auth.ok) return apiError(auth.status, auth.code, auth.message);
 
     const matching = ROUTES.map((r) => ({ r, params: matchPath(r.path, url.pathname) })).filter((m) => m.params !== null);

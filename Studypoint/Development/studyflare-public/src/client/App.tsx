@@ -13,11 +13,15 @@ import { LibraryPage } from './pages/LibraryPage.tsx';
 const SHOW_GALLERY = import.meta.env.DEV || import.meta.env.VITE_DS_GALLERY === 'true';
 const GalleryPage = SHOW_GALLERY ? lazy(() => import('./pages/GalleryPage.tsx')) : null;
 
-type RouteDef = { path: string; render: () => ReactNode };
+// The note editor is the biggest chunk (Tiptap + KaTeX), so it loads only when a note is opened.
+const NotePage = lazy(() => import('./notes/NotePage.tsx'));
+
+type RouteDef = { path: string; render: (params: Record<string, string>) => ReactNode };
 
 const ROUTES: readonly RouteDef[] = [
   { path: '/', render: () => <TodayPage /> },
   { path: '/library', render: () => <LibraryPage /> },
+  { path: '/notes/:id', render: (p) => <NotePage id={p['id'] ?? ''} /> },
   { path: '/review', render: () => <ComingSoonPage title="Review" what="Flashcard reviews, scheduled with FSRS, arrive in the next phase." /> },
   { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
   { path: '/settings', render: () => <SettingsPage /> },
@@ -27,12 +31,12 @@ const ROUTES: readonly RouteDef[] = [
 export function App() {
   const { pathname } = useLocation();
   useFocusMainHeading(pathname);
-  const route = ROUTES.find((r) => matchPath(r.path, pathname) !== null);
+  const hit = ROUTES.map((r) => ({ r, params: matchPath(r.path, pathname) })).find((m) => m.params !== null);
 
   return (
     <ToastProvider>
       <AppShell pathname={pathname}>
-        <Suspense fallback={<p className="text-text-2">Loading…</p>}>{route ? route.render() : <NotFoundPage />}</Suspense>
+        <Suspense fallback={<p className="text-text-2">Loading…</p>}>{hit ? hit.r.render(hit.params ?? {}) : <NotFoundPage />}</Suspense>
       </AppShell>
     </ToastProvider>
   );

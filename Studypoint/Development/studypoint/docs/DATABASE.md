@@ -533,14 +533,8 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
--- Added in migration 0002 (2026-11-26): people the owner invited (AUTH-06). App-level, not user-owned.
--- Owners stay in the OWNER_EMAILS / ALLOWED_EMAILS secrets so a database change can never lock them out.
-CREATE TABLE allowed_emails (
-  email TEXT PRIMARY KEY,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member')),
-  added_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-  created_at INTEGER NOT NULL
-);
+-- Migration 0002 added `allowed_emails` (Settings → People invites, AUTH-06). Migration 0005 dropped it
+-- (2026-11-26, ARCHITECTURE A21): each person now deploys their own Studyflare (AUTH-07).
 
 -- Added in migration 0003 (2026-11-26): deployment settings written by first-run setup (AUTH-07).
 -- Used only when the ACCESS_* vars are left as "todo" (one-click deploys). Never holds a token. Not exported.

@@ -3,8 +3,7 @@
 // the migrations: every user table present, every foreign-key parent listed earlier.
 //
 // Not exported: passages_fts (rebuilt on restore), and the system tables backups, schema_meta and
-// allowed_emails (the app-wide sign-in list from Settings → People) and app_config (first-run setup
-// values), neither of which is one person's study data.
+// app_config (first-run setup values), which isn't one person's study data.
 
 export type ExportTable = {
   name: string;
