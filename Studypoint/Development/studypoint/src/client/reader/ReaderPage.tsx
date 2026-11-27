@@ -13,6 +13,7 @@ import { KIND_LABEL, deleteFile, fetchFile, openFile, restoreFile, type FileItem
 import { imageMime, parseDocx, parsePptx, type Block, type Entries, type Run } from './ooxml.ts';
 import { PdfView } from './PdfView.tsx';
 import { MarkdownView } from './MarkdownView.tsx';
+import { takeHighlight } from './highlight.ts';
 
 const EXT: Record<string, string> = {
   'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'text/markdown': '.md',
@@ -168,6 +169,8 @@ export default function ReaderPage({ id }: { id: string }) {
   const [progress, setProgress] = useState<[number, number]>([0, 1]);
   const [error, setError] = useState<string | null>(null);
   const initialPage = Math.max(1, Number(search.get('page') ?? '1') || 1);
+  // A citation that opened this file (step 6a): highlighted on its PDF page, quoted above other kinds.
+  const cite = useMemo(() => takeHighlight(id), [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,7 +238,7 @@ export default function ReaderPage({ id }: { id: string }) {
         </span>
       </div>
     );
-  } else if (file.kind === 'pdf') body = <PdfView bytes={bytes} initialPage={initialPage} />;
+  } else if (file.kind === 'pdf') body = <PdfView bytes={bytes} initialPage={initialPage} highlight={cite ? { page: cite.page ?? initialPage, quote: cite.quote } : null} />;
   else if (file.kind === 'image') body = <ImageView bytes={bytes} mime={file.mime} title={file.title} />;
   else if (file.kind === 'md') body = <MarkdownView text={new TextDecoder().decode(bytes)} />;
   else if (!entries) body = <p className="text-danger">This file couldn’t be unpacked. It may be damaged. Try downloading it.</p>;
@@ -265,6 +268,12 @@ export default function ReaderPage({ id }: { id: string }) {
           </p>
         ) : null}
       </div>
+      {cite && file && file.kind !== 'pdf' ? (
+        <blockquote className="rounded-md border-l-4 border-accent bg-accent-bg px-4 py-2 text-sm text-text">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-2">Cited passage{cite.page ? ` · ${file.kind === 'pptx' ? 'slide' : 'page'} ${cite.page}` : ''}</span>
+          “{cite.quote}”
+        </blockquote>
+      ) : null}
       {body}
     </div>
   );

@@ -4,7 +4,7 @@
 
 import { extractJson, parseArticle, parseCards, parseDiagram, parseGrade, parsePlan, parseQuiz, parseVerdicts } from '../../shared/aiOutput.ts';
 import { uuid7 } from '../../shared/uuid7.ts';
-import { AiError, complete, embed, modelFor, ocr, type AiEnv } from './gateway.ts';
+import { AiError, complete, completeStream, embed, modelFor, ocr, type AiEnv } from './gateway.ts';
 import { PROMPT_VERSIONS, answerPrompt, articlePrompt, cardsPrompt, diagramPrompt, gradePrompt, planPrompt, quizPrompt, validatePrompt, type Passage } from './prompts.ts';
 
 const MAX_PASSAGES = 40;
@@ -57,7 +57,56 @@ export async function handleAnswer(env: AiEnv, userId: string, b: Record<string,
   return { text, promptVersion: PROMPT_VERSIONS.answer };
 }
 
-type GenKind = 'cards' | 'quiz' | 'article' | 'diagram' | 'plan';
+const STREAM_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/x-ndjson; charset=utf-8',
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
+
+/**
+ * The answer, streamed as newline-delimited JSON (step 6a, AST-01; format in shared/sseText.ts). Input
+ * problems and a failure to start throw an AiError (a normal JSON error); once streaming, a failure is
+ * sent as an `{"error"}` line. Citations are verified in the browser, sentence by sentence.
+ */
+export async function handleAnswerStream(env: AiEnv, userId: string, b: Record<string, unknown>): Promise<Response> {
+  const question = s(b['question'], 2000).trim();
+  if (question.length < 3) throw new AiError(400, 'Type a question.');
+  const passages = readPassages(b['passages']);
+  const started = Date.now();
+  const messages = answerPrompt(question, passages, b['mode'] === 'tutor' ? 'tutor' : 'direct', b['general'] !== false);
+  const deltas = await completeStream(env, userId, 'answer', messages, { maxTokens: 1800 });
+  const enc = new TextEncoder();
+  const line = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
+  let outChars = 0;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await deltas.next();
+        if (!next.done) {
+          outChars += next.value.length;
+          controller.enqueue(line({ t: next.value }));
+          return;
+        }
+        if (outChars === 0) controller.enqueue(line({ error: 'The AI ran out of room before answering. Try a smaller selection.' }));
+        else {
+          controller.enqueue(line({ done: true, promptVersion: PROMPT_VERSIONS.answer }));
+          await logGeneration(env, userId, 'chat', PROMPT_VERSIONS.answer, modelFor(env, 'answer'), 1, question.length, outChars, started);
+        }
+        controller.close();
+      } catch (err) {
+        controller.enqueue(line({ error: err instanceof AiError ? err.message : 'The AI couldn’t finish. Try again in a moment.' }));
+        controller.close();
+      }
+    },
+    async cancel() {
+      await deltas.return(undefined);
+    },
+  });
+  return new Response(body, { status: 200, headers: STREAM_HEADERS });
+}
+
+type GenKind ='cards' | 'quiz' | 'article' | 'diagram' | 'plan';
 
 export async function handleGenerate(env: AiEnv, userId: string, b: Record<string, unknown>) {
   const kind = b['kind'] as GenKind;

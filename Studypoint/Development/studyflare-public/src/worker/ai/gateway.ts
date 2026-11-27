@@ -3,7 +3,9 @@
 // provider that trains on free-tier data (PRV-02). The browser sends the decrypted text a request needs;
 // nothing sent here is stored. Model IDs come from the AI_MODELS var, never from code.
 
-export type AiTask = 'answer' | 'generate' | 'validate' | 'grade' | 'embed' | 'ocr';
+import { createSseTextReader } from '../../shared/sseText.ts';
+
+export type AiTask ='answer' | 'generate' | 'validate' | 'grade' | 'embed' | 'ocr';
 
 export type AiEnv = { AI?: Ai; AI_MODELS?: string; DB?: D1Database };
 
@@ -96,6 +98,64 @@ export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask,
   await recordUsage(env, userId, task, messages.reduce((n, m) => n + m.content.length, 0), text.length);
   if (!text) throw new AiError(502, 'The AI ran out of room before answering. Try a smaller selection.');
   return text;
+}
+
+/**
+ * The same completion, streamed (step 6a, AST-01): yields the answer text as it arrives. The model's
+ * reasoning is dropped. Errors before the first byte throw an AiError; later ones throw from the iterator.
+ */
+export async function completeStream(env: AiEnv, userId: string, task: 'answer', messages: ChatMessage[], opts: { maxTokens?: number } = {}): Promise<AsyncGenerator<string>> {
+  const model = modelFor(env, task);
+  let res: unknown;
+  try {
+    res = await ai(env).run(model as keyof AiModels, {
+      messages,
+      max_tokens: (opts.maxTokens ?? 2048) + REASONING_ROOM,
+      reasoning_effort: EFFORT[task],
+      temperature: 0.2,
+      stream: true,
+    } as never);
+  } catch (err) {
+    throw friendly(err);
+  }
+  const inChars = messages.reduce((n, m) => n + m.content.length, 0);
+  async function* deltas(): AsyncGenerator<string> {
+    let outChars = 0;
+    try {
+      if (!(res instanceof ReadableStream)) {
+        // Not streamed after all: hand over the whole reply at once.
+        const text = textOf(res);
+        outChars = text.length;
+        if (text) yield text;
+        return;
+      }
+      const reader = (res as ReadableStream<Uint8Array>).getReader();
+      const decoder = new TextDecoder();
+      const sse = createSseTextReader();
+      for (;;) {
+        let r: ReadableStreamReadResult<Uint8Array>;
+        try {
+          r = await reader.read();
+        } catch (err) {
+          throw friendly(err);
+        }
+        if (r.done) break;
+        const t = sse.push(decoder.decode(r.value, { stream: true }));
+        if (t) {
+          outChars += t.length;
+          yield t;
+        }
+      }
+      const last = sse.push(decoder.decode()) + sse.end();
+      if (last) {
+        outChars += last.length;
+        yield last;
+      }
+    } finally {
+      await recordUsage(env, userId, task, inChars, outChars);
+    }
+  }
+  return deltas();
 }
 
 /** Embeddings for search (normalised later in the browser). Max 32 texts per call. */

@@ -1,32 +1,28 @@
-// Ask and Search (AST-01..07, LIB-07, LKP-01). Search shows matching passages; Ask answers from the best
-// passages with every citation checked word-for-word against your material (anything that can't be
-// checked is shown as unverified). If your material doesn't cover it, look it up on trusted websites.
+// Ask and Search (AST-01..08, LIB-07, LKP-01; step 6a). Search shows matching passages. Ask answers from
+// the best passages, streamed sentence by sentence: a sentence appears only once every citation in it has
+// been checked word for word against your material (anything that can't be is shown as unverified).
+// Conversations are saved, encrypted, until you delete them; citations preview the passage they quote.
 
-import { useEffect, useState } from 'react';
-import { Button, SegmentedControl, Switch, TextArea, useToast } from '../ds/index.ts';
+import { useEffect, useRef, useState } from 'react';
+import { Button, ConfirmDialog, Dialog, SegmentedControl, Select, Switch, TextArea, TextField, useToast } from '../ds/index.ts';
 import { Link } from '../Link.tsx';
-import { verifyAnswer, type Segment, type VerifiedAnswer } from '../../shared/answer.ts';
+import { createAnswerVerifier, type Segment, type VerifiedAnswer } from '../../shared/answer.ts';
 import type { Hit } from '../../shared/searchIndex.ts';
 import { MathText } from '../cards/MathText.tsx';
 import { uploadFile } from '../files/filesApi.ts';
-import { askModel, webLookup, type SentPassage, type WebResult } from './aiApi.ts';
+import { ApiError } from '../api.ts';
+import { askModel, askModelStream, webLookup, type SentPassage, type WebResult } from './aiApi.ts';
 import { loadCourseIndex, passageLink, searchCourse, type CourseIndex } from './indexer.ts';
 import { ProcessPanel } from './ProcessPanel.tsx';
+import { CitationChip } from '../chats/CitationChip.tsx';
+import { deleteChat, fetchChat, fetchChats, renameChat, saveTurn, startChat, type ChatSource, type ChatSummary, type ChatTurn } from '../chats/chatApi.ts';
 
-type Source = { ref: string; title: string; loc: string; href: string; external: boolean; text: string; ocr: boolean };
-type Turn = { question: string; answer: VerifiedAnswer; sources: Source[]; web: boolean };
+const EMPTY: VerifiedAnswer = { coverage: 'partial', segments: [], verifiedCount: 0, failedCount: 0 };
+const NEW = '__new__';
 
-function SegmentView({ s, sources }: { s: Segment; sources: readonly Source[] }) {
-  const chip = (ref: string) => {
-    const src = sources.find((x) => x.ref === ref);
-    if (!src) return null;
-    const label = `${src.title}${src.loc ? `, ${src.loc}` : ''}`;
-    return src.external ? (
-      <a key={ref} href={src.href} target="_blank" rel="noopener noreferrer" className="ml-1 rounded-sm bg-sunken px-1 text-xs text-accent no-underline hover:underline" title={label}>{ref}</a>
-    ) : (
-      <Link key={ref} to={src.href} className="ml-1 rounded-sm bg-sunken px-1 text-xs text-accent no-underline hover:underline" title={label}>{ref}</Link>
-    );
-  };
+type Live = { question: string; answer: VerifiedAnswer; sources: ChatSource[]; web: boolean };
+
+function SegmentView({ s, sources }: { s: Segment; sources: readonly ChatSource[] }) {
   if (s.kind === 'general') {
     return <p className="border-l-2 border-border-strong pl-3 text-text-2"><span className="mr-2 text-xs font-semibold uppercase tracking-wide text-text-3">General knowledge</span><MathText text={s.text} /></p>;
   }
@@ -41,14 +37,52 @@ function SegmentView({ s, sources }: { s: Segment; sources: readonly Source[] })
   return (
     <p className="text-text">
       <MathText text={s.text} />
-      {s.citations.filter((c) => c.verified).map((c) => chip(c.ref))}
+      {s.citations.filter((c) => c.verified).map((c, i) => {
+        const src = sources.find((x) => x.ref === c.ref);
+        return src ? <CitationChip key={`${c.ref}-${i}`} refId={c.ref} quote={c.quote} source={src} /> : null;
+      })}
       {s.conflict ? <span className="ml-2 text-xs text-danger">sources disagree</span> : null}
       {s.uncertain ? <span className="ml-2 text-xs text-text-3">from OCR, check the page</span> : null}
     </p>
   );
 }
 
-export function AskPanel({ courseId }: { courseId: string }) {
+function TurnView({ t, live, busy, onLookUp, onSaveWeb }: { t: Live; live: boolean; busy: boolean; onLookUp: () => void; onSaveWeb: (s: ChatSource) => void }) {
+  return (
+    <article className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-5" aria-busy={live}>
+      <h3 className="font-semibold text-text">{t.question}</h3>
+      {!live && t.answer.coverage === 'not_found' ? <p className="text-text-2">{t.web ? 'The trusted websites found don’t answer this either.' : 'Not found in your materials.'}</p> : null}
+      {t.answer.segments.map((s, j) => <SegmentView key={j} s={s} sources={t.sources} />)}
+      {live ? <p className="text-sm text-text-3">{t.answer.segments.length ? 'Writing and checking the next sentence…' : 'Reading your material…'}</p> : null}
+      {!live && t.answer.failedCount > 0 ? <p className="text-xs text-text-3">{t.answer.failedCount} citation{t.answer.failedCount === 1 ? '' : 's'} couldn’t be verified and {t.answer.failedCount === 1 ? 'was' : 'were'} left out.</p> : null}
+      {!live && t.answer.coverage !== 'covered' && !t.web ? (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={onLookUp} disabled={busy}>Look it up on trusted websites</Button>
+        </div>
+      ) : null}
+      {!live ? (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-text-2">Sources ({t.sources.length})</summary>
+          <ol className="mt-2 flex flex-col gap-1">
+            {t.sources.map((s) => (
+              <li key={s.ref} className="flex flex-wrap items-baseline gap-2">
+                <span className="font-mono text-xs text-text-3">{s.ref}</span>
+                {s.external ? <a href={s.href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{s.title}</a> : <Link to={s.href} className="text-accent hover:underline">{s.title}</Link>}
+                <span className="text-text-3">{s.loc}</span>
+                {s.external ? <Button size="sm" variant="ghost" onClick={() => onSaveWeb(s)}>Save to course</Button> : null}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+/** `chatId` opens a saved conversation (e.g. from the all-chats list); `onChatChange` reports the open one. */
+export function AskPanel({ courseId, chatId = null, onChatChange }: { courseId: string; chatId?: string | null; onChatChange?: (id: string | null) => void }) {
   const toast = useToast();
   const [mode, setMode] = useState<'ask' | 'search'>('ask');
   const [q, setQ] = useState('');
@@ -56,23 +90,65 @@ export function AskPanel({ courseId }: { courseId: string }) {
   const [index, setIndex] = useState<CourseIndex | null>(null);
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<Hit[] | null>(null);
-  const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [processed, setProcessed] = useState(0);
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const [chat, setChat] = useState<ChatSummary | null>(null);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [live, setLive] = useState<Live | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+  const report = useRef(onChatChange);
+  report.current = onChatChange;
 
   useEffect(() => {
     setIndex(null);
     loadCourseIndex(courseId).then(setIndex, () => setIndex(null));
   }, [courseId, processed]);
 
+  useEffect(() => {
+    fetchChats(courseId).then(setChats, () => setChats([]));
+  }, [courseId]);
+
+  const open = async (id: string | null) => {
+    abort.current?.abort();
+    setLive(null);
+    setError(null);
+    if (!id) {
+      setChat(null);
+      setTurns([]);
+      report.current?.(null);
+      return;
+    }
+    try {
+      const c = await fetchChat(id);
+      setChat(c);
+      setTurns(c.turns);
+      setTutor(c.mode === 'tutor');
+      report.current?.(c.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That conversation couldn’t be opened.');
+    }
+  };
+
+  useEffect(() => {
+    // Open the requested conversation when it's asked for (not the one already open here).
+    if (chatId && chatId !== chat?.id) void open(chatId);
+  }, [chatId]);
+
+  useEffect(() => () => abort.current?.abort(), []);
+
   const isNote = (id: string) => Boolean(index?.noteIds.has(id));
 
-  const toSources = (hs: readonly Hit[]): Source[] =>
+  const toSources = (hs: readonly Hit[]): ChatSource[] =>
     hs.map((h, i) => ({ ref: `P${i + 1}`, title: index?.titles.get(h.passage.sourceId) ?? 'Source', loc: h.passage.loc, href: passageLink(h.passage, isNote(h.passage.sourceId)), external: false, text: h.passage.text, ocr: h.passage.ocr }));
 
-  const ask = async (question: string, general: boolean, sourcesOverride?: Source[]) => {
+  const ask = async (question: string, general: boolean, sourcesOverride?: ChatSource[]) => {
     setError(null);
     setBusy(true);
+    const ctrl = new AbortController();
+    abort.current = ctrl;
     try {
       let sources = sourcesOverride;
       if (!sources) {
@@ -80,13 +156,42 @@ export function AskPanel({ courseId }: { courseId: string }) {
         sources = toSources(await searchCourse(index, question, 8));
         if (sources.length === 0) throw new Error('Nothing in your material matches that. Try other words, or look it up on the web.');
       }
+      const web = Boolean(sourcesOverride?.some((s) => s.external));
       const sent: SentPassage[] = sources.map((s) => ({ ref: s.ref, label: `${s.title}${s.loc ? `, ${s.loc}` : ''}`, text: s.text, ocr: s.ocr, url: s.external ? s.href : undefined }));
-      const raw = await askModel(question, sent, tutor ? 'tutor' : 'direct', general);
-      const answer = verifyAnswer(raw, sources.map((s) => ({ ref: s.ref, text: s.text, ocr: s.ocr })));
-      setTurns((t) => [...t, { question, answer, sources, web: Boolean(sourcesOverride?.some((s) => s.external)) }]);
+      const verifier = createAnswerVerifier(sources.map((s) => ({ ref: s.ref, text: s.text, ocr: s.ocr })));
+      const base: Live = { question, answer: EMPTY, sources, web };
+      setLive(base);
       setQ('');
+      try {
+        await askModelStream(question, sent, tutor ? 'tutor' : 'direct', general, (chunk) => {
+          const a = verifier.push(chunk);
+          setLive({ ...base, answer: a });
+        }, ctrl.signal);
+      } catch (e) {
+        // An older Worker without the streaming route: ask the normal way.
+        if (!(e instanceof ApiError && e.status === 404)) throw e;
+        verifier.push(await askModel(question, sent, tutor ? 'tutor' : 'direct', general));
+      }
+      const answer = verifier.end();
+      const turn = { question, answer, sources, web };
+      setLive(null);
+      setTurns((t) => [...t, { ...turn, id: `local-${Date.now()}`, at: Date.now() }]);
+      // Save it (encrypted). A new conversation starts with this question as its title.
+      try {
+        let current = chat;
+        const fresh = !current;
+        if (!current) current = await startChat(courseId, question, tutor ? 'tutor' : 'direct');
+        await saveTurn(current.id, turn);
+        const saved: ChatSummary = { ...current, messages: current.messages + 2, updatedAt: Date.now() };
+        setChat(saved);
+        setChats((cs) => [saved, ...cs.filter((c) => c.id !== saved.id)]);
+        if (fresh) report.current?.(saved.id);
+      } catch (e) {
+        toast.show({ message: e instanceof Error ? `The answer wasn’t saved: ${e.message}` : 'The answer wasn’t saved.', tone: 'error' });
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      setLive(null);
+      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
     }
@@ -98,7 +203,7 @@ export function AskPanel({ courseId }: { courseId: string }) {
     try {
       const { results } = await webLookup(question);
       if (results.length === 0) throw new Error('No trusted websites matched. Try different words.');
-      const sources: Source[] = results.slice(0, 6).map((r: WebResult, i) => ({ ref: `P${i + 1}`, title: r.title, loc: new URL(r.url).hostname, href: r.url, external: true, text: r.content, ocr: false }));
+      const sources: ChatSource[] = results.slice(0, 6).map((r: WebResult, i) => ({ ref: `P${i + 1}`, title: r.title, loc: new URL(r.url).hostname, href: r.url, external: true, text: r.content, ocr: false }));
       setBusy(false);
       await ask(question, false, sources);
     } catch (e) {
@@ -120,7 +225,7 @@ export function AskPanel({ courseId }: { courseId: string }) {
     }
   };
 
-  const saveWebSource = async (s: Source) => {
+  const saveWebSource = async (s: ChatSource) => {
     try {
       const body = `# ${s.title}\n\n> From [${s.href}](${s.href}), found by Studyflare’s trusted web lookup on ${new Date().toLocaleDateString()}.\n\n${s.text}\n`;
       await uploadFile(new File([body], `${s.title.slice(0, 100)}.md`, { type: 'text/markdown' }), courseId, undefined, 'link');
@@ -130,22 +235,81 @@ export function AskPanel({ courseId }: { courseId: string }) {
     }
   };
 
+  const doRename = async () => {
+    if (!chat || renaming === null) return;
+    const title = renaming.trim() || chat.title;
+    try {
+      await renameChat(chat.id, title);
+      const next = { ...chat, title };
+      setChat(next);
+      setChats((cs) => cs.map((c) => (c.id === next.id ? next : c)));
+      setRenaming(null);
+    } catch (e) {
+      toast.show({ message: e instanceof Error ? e.message : 'Couldn’t rename it.', tone: 'error' });
+    }
+  };
+
+  const doDelete = async () => {
+    if (!chat) return;
+    setConfirmDelete(false);
+    try {
+      await deleteChat(chat.id);
+      setChats((cs) => cs.filter((c) => c.id !== chat.id));
+      toast.show({ message: `Deleted “${chat.title}”` });
+      void open(null);
+    } catch (e) {
+      toast.show({ message: e instanceof Error ? e.message : 'Couldn’t delete it.', tone: 'error' });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <ProcessPanel courseId={courseId} onChecked={() => setProcessed((n) => n + 1)} />
       <SegmentedControl label="What do you want to do?" value={mode} options={[{ value: 'ask', label: 'Ask a question' }, { value: 'search', label: 'Search my material' }]} onChange={setMode} />
+
+      {mode === 'ask' ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-60 flex-1">
+            <Select
+              label="Conversation"
+              value={chat?.id ?? NEW}
+              options={[{ value: NEW, label: 'New conversation' }, ...chats.map((c) => ({ value: c.id, label: `${c.title} · ${shortDate(c.updatedAt)}` }))]}
+              onChange={(v) => void open(v === NEW ? null : v)}
+            />
+          </div>
+          {chat ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setRenaming(chat.title)}>Rename</Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(true)}>Delete</Button>
+              <Button size="sm" onClick={() => void open(null)}>New conversation</Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === 'ask' ? (
+        <div className="flex flex-col gap-6" aria-live="polite">
+          {turns.length === 0 && !live ? <p className="text-text-2">{chat ? 'This conversation is empty.' : 'Ask anything about this course. Answers come only from your material, and every citation is checked.'}</p> : null}
+          {turns.map((t) => (
+            <TurnView key={t.id} t={t} live={false} busy={busy} onLookUp={() => void lookUp(t.question)} onSaveWeb={(s) => void saveWebSource(s)} />
+          ))}
+          {live ? <TurnView t={live} live busy onLookUp={() => undefined} onSaveWeb={() => undefined} /> : null}
+        </div>
+      ) : null}
+
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!q.trim()) return;
+          if (!q.trim() || busy) return;
           if (mode === 'ask') void ask(q.trim(), true);
           else void search();
         }}
       >
-        <TextArea label={mode === 'ask' ? 'Your question' : 'Search for'} rows={2} value={q} onChange={(e) => setQ(e.target.value)} placeholder={mode === 'ask' ? 'e.g. Why does the heat flux point down the temperature gradient?' : 'e.g. Fourier’s law'} />
+        <TextArea label={mode === 'ask' ? (turns.length ? 'Ask a follow-up' : 'Your question') : 'Search for'} rows={2} value={q} onChange={(e) => setQ(e.target.value)} placeholder={mode === 'ask' ? 'e.g. Why does the heat flux point down the temperature gradient?' : 'e.g. Fourier’s law'} />
         <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" variant="primary" loading={busy}>{mode === 'ask' ? 'Ask' : 'Search'}</Button>
+          <Button type="submit" variant="primary" loading={busy && !live}>{mode === 'ask' ? 'Ask' : 'Search'}</Button>
+          {live ? <Button variant="ghost" onClick={() => abort.current?.abort()}>Stop</Button> : null}
           {mode === 'ask' ? <Switch checked={tutor} onChange={setTutor} label="Tutor mode" description="Hints and guiding questions instead of the answer." /> : null}
         </div>
       </form>
@@ -166,36 +330,29 @@ export function AskPanel({ courseId }: { courseId: string }) {
         )
       ) : null}
 
-      {mode === 'ask' ? (
-        <div className="flex flex-col gap-6" aria-live="polite">
-          {[...turns].reverse().map((t, i) => (
-            <article key={turns.length - i} className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-5">
-              <h3 className="font-semibold text-text">{t.question}</h3>
-              {t.answer.coverage === 'not_found' ? <p className="text-text-2">{t.web ? 'The trusted websites found don’t answer this either.' : 'Not found in your materials.'}</p> : null}
-              {t.answer.segments.map((s, j) => <SegmentView key={j} s={s} sources={t.sources} />)}
-              {t.answer.failedCount > 0 ? <p className="text-xs text-text-3">{t.answer.failedCount} citation{t.answer.failedCount === 1 ? '' : 's'} couldn’t be verified and {t.answer.failedCount === 1 ? 'was' : 'were'} left out.</p> : null}
-              {t.answer.coverage !== 'covered' && !t.web ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => void lookUp(t.question)} disabled={busy}>Look it up on trusted websites</Button>
-                </div>
-              ) : null}
-              <details className="text-sm">
-                <summary className="cursor-pointer text-text-2">Sources ({t.sources.length})</summary>
-                <ol className="mt-2 flex flex-col gap-1">
-                  {t.sources.map((s) => (
-                    <li key={s.ref} className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-mono text-xs text-text-3">{s.ref}</span>
-                      {s.external ? <a href={s.href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{s.title}</a> : <Link to={s.href} className="text-accent hover:underline">{s.title}</Link>}
-                      <span className="text-text-3">{s.loc}</span>
-                      {s.external ? <Button size="sm" variant="ghost" onClick={() => void saveWebSource(s)}>Save to course</Button> : null}
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            </article>
-          ))}
-        </div>
-      ) : null}
+      <Dialog
+        open={renaming !== null}
+        onClose={() => setRenaming(null)}
+        title="Rename conversation"
+        size="sm"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setRenaming(null)}>Cancel</Button>
+            <Button variant="primary" onClick={() => void doRename()}>Rename</Button>
+          </>
+        }
+      >
+        <TextField label="Name" value={renaming ?? ''} onChange={(e) => setRenaming(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void doRename(); }} />
+      </Dialog>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this conversation?"
+        message={`“${chat?.title ?? ''}” and all its answers will be deleted permanently. This can’t be undone.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

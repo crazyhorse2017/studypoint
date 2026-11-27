@@ -17,10 +17,23 @@ import { SetupError, runSetup } from './setup/cloudflare.ts';
 import { CardError, MAX_CARD_CHARS, createCard, deleteCard, getStudySettings, listCards, restoreCard, reviewQueue, reviewSummary, setExam, setStudySettings, submitReview, updateCard, upcomingExams } from './cards.ts';
 import { ImportError, importUrl } from './importUrl.ts';
 import { AiError } from './ai/gateway.ts';
-import { handleAnswer, handleEmbed, handleGenerate, handleGrade, handleOcr, handleValidate } from './ai/handlers.ts';
+import { handleAnswer, handleAnswerStream, handleEmbed, handleGenerate, handleGrade, handleOcr, handleValidate } from './ai/handlers.ts';
 import { LookupError, trustedSearch } from './ai/lookup.ts';
 import { IndexError, MAX_INDEX_BYTES, getIndex, listIndexes, putIndex } from './aiIndex.ts';
 import { QuizError, createQuiz, getQuiz, hideQuiz, listQuizzes, submitQuiz } from './quizzes.ts';
+import { ConversationError, MAX_MESSAGE_CHARS, addMessages, createConversation, deleteConversation, getConversation, listConversations, renameConversation } from './conversations.ts';
+
+async function conversationCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ConversationError) return apiError(err.status, 'conversation_error', err.message);
+    throw err;
+  }
+}
+
+/** Two messages (a question and an answer with its passages) per call, encrypted. */
+const MAX_CONVERSATION_JSON = 2 * MAX_MESSAGE_CHARS + 16 * 1024;
 
 async function quizCall(fn: () => Promise<Response>): Promise<Response> {
   try {
@@ -264,6 +277,15 @@ export const ROUTES: readonly Route[] = [
   aiRoute('/api/ai/embed', (env, u, b) => handleEmbed(env, u, b)),
   aiRoute('/api/ai/ocr', (env, u, b) => handleOcr(env, u, b)),
   aiRoute('/api/ai/answer', (env, u, b) => handleAnswer(env, u, b)),
+  {
+    // Step 6a (AST-01): the same answer, streamed as newline-delimited JSON.
+    method: 'POST',
+    path: '/api/ai/answer/stream',
+    handler: async ({ request, env, userId }) => {
+      if (!userId) return needsDb();
+      return withJson(request, (b) => aiCall(() => handleAnswerStream(env, userId, (b ?? {}) as Record<string, unknown>)), MAX_AI_JSON);
+    },
+  },
   aiRoute('/api/ai/generate', (env, u, b) => handleGenerate(env, u, b)),
   aiRoute('/api/ai/validate', (env, u, b) => handleValidate(env, u, b)),
   aiRoute('/api/ai/grade', (env, u, b) => handleGrade(env, u, b)),
@@ -272,6 +294,59 @@ export const ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/api/ai/status',
     handler: ({ env }) => json({ ai: Boolean(env.AI && env.AI_MODELS), lookup: Boolean(env.TAVILY_API_KEY), files: Boolean(env.FILES) }),
+  },
+  {
+    // Step 6a (AST-06): saved conversations. Titles and messages are ciphertext.
+    method: 'GET',
+    path: '/api/conversations',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ conversations: await listConversations(env.DB, userId, url.searchParams.get('course')) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/conversations',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => conversationCall(async () => json({ conversation: await createConversation(db, userId, b) }, 201)));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/conversations/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const c = await getConversation(env.DB, userId, params['id'] ?? '');
+      return c ? json({ conversation: c }) : apiError(404, 'not_found', "That conversation doesn't exist.");
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/conversations/:id/messages',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => conversationCall(async () => json(await addMessages(db, userId, params['id'] ?? '', b))), MAX_CONVERSATION_JSON);
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/conversations/:id',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => conversationCall(async () => ((await renameConversation(db, userId, params['id'] ?? '', b)) ? json({ renamed: true }) : apiError(404, 'not_found', "That conversation doesn't exist."))));
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/conversations/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await deleteConversation(env.DB, userId, params['id'] ?? '')) ? json({ deleted: true }) : apiError(404, 'not_found', "That conversation doesn't exist.");
+    },
   },
   {
     // QZ-01..04: practice quizzes (encrypted questions; scores in the clear).

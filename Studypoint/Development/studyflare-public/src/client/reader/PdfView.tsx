@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GlobalWorkerOptions, TextLayer, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { Button, TextField } from '../ds/index.ts';
+import { piecesForQuote } from '../../shared/quoteSpans.ts';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -15,7 +16,7 @@ const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 2;
 const stepZoom = (z: number, dir: 1 | -1) => ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(z) + dir))] ?? 1;
 
-function Page({ doc, n, width, onVisible }: { doc: PDFDocumentProxy; n: number; width: number; onVisible: (n: number) => void }) {
+function Page({ doc, n, width, onVisible, quote }: { doc: PDFDocumentProxy; n: number; width: number; onVisible: (n: number) => void; quote: string | null }) {
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const [aspect, setAspect] = useState(1.294); // A4/Letter until the real size is known
@@ -69,13 +70,19 @@ function Page({ doc, n, width, onVisible }: { doc: PDFDocumentProxy; n: number; 
       if (cancelled) return;
       text = new TextLayer({ textContentSource: page.streamTextContent(), container: layer, viewport });
       await text.render().catch(() => undefined);
+      if (cancelled || !quote) return;
+      // A cited passage (step 6a): mark the text-layer pieces the quote covers and bring them into view.
+      const spans = Array.from(layer.querySelectorAll<HTMLSpanElement>('span:not(.markedContent)'));
+      const hit = piecesForQuote(spans.map((sp) => sp.textContent ?? ''), quote);
+      hit.forEach((i) => spans[i]?.classList.add('sf-cite'));
+      spans[hit[0] ?? -1]?.scrollIntoView({ block: 'center' });
     })();
     return () => {
       cancelled = true;
       task?.cancel();
       text?.cancel();
     };
-  }, [doc, n, near, width]);
+  }, [doc, n, near, width, quote]);
 
   return (
     <div
@@ -89,7 +96,8 @@ function Page({ doc, n, width, onVisible }: { doc: PDFDocumentProxy; n: number; 
   );
 }
 
-export function PdfView({ bytes, initialPage }: { bytes: Uint8Array; initialPage: number }) {
+/** `highlight` marks a cited quote on its page (step 6a). */
+export function PdfView({ bytes, initialPage, highlight = null }: { bytes: Uint8Array; initialPage: number; highlight?: { page: number; quote: string } | null }) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<number>(1);
@@ -172,7 +180,7 @@ export function PdfView({ bytes, initialPage }: { bytes: Uint8Array; initialPage
       </div>
       <div ref={wrap} className="flex flex-col gap-4 overflow-x-auto pb-8">
         {!doc ? <p className="text-text-2">Preparing pages…</p> : null}
-        {doc && width > 0 ? Array.from({ length: doc.numPages }, (_, i) => <Page key={i + 1} doc={doc} n={i + 1} width={width} onVisible={onVisible} />) : null}
+        {doc && width > 0 ? Array.from({ length: doc.numPages }, (_, i) => <Page key={i + 1} doc={doc} n={i + 1} width={width} onVisible={onVisible} quote={highlight && highlight.page === i + 1 ? highlight.quote : null} />) : null}
       </div>
     </div>
   );

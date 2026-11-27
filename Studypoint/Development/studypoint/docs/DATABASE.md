@@ -333,6 +333,13 @@ CREATE INDEX idx_flags_open ON source_change_flags(user_id, status);
 Superseded passages are kept (`is_current = 0`) while any card, question, citation or flag refers to them, so old citations always resolve.
 
 ### 3.5 Assistant (P1) — `AST-*`
+**As built (step 6a, 2026-11-27, migration 0009):**
+- `conversations.title` and `messages.content_md` hold `sf1` ciphertext. The AADs are `<conversation id>#title` and `<message id>#msg`.
+- A question is one envelope. An answer is one envelope holding JSON `{answer: VerifiedAnswer, sources: [{ref, title, loc, href, external, text, ocr}], web}`, so its citations still open after the source changes.
+- `segments_json` stays NULL, and `message_citations` isn't used: personal passages live in encrypted R2 bundles (A24), not in `passages`.
+- Chats are kept until Alex deletes them. Deleting is permanent and removes the messages too.
+- 0009 adds `idx_conversations_user (user_id, updated_at)`, `idx_conversations_course (user_id, course_id, updated_at)` and `idx_messages_conversation (conversation_id, created_at)`.
+
 ```sql
 CREATE TABLE conversations (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),

@@ -250,6 +250,12 @@
   .textLayer ::selection {
     background: color-mix(in srgb, var(--accent) 30%, transparent);
   }
+  /* A cited passage opened from an answer (step 6a): highlighted, with an outline so it isn't colour alone. */
+  .textLayer span.sf-cite {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    border-radius: 2px;
+  }
 
   /* Reader: Word documents. */
   .doc-view h2 { font-family: var(--ff-ui); font-size: 1.5em; font-weight: 600; margin-top: 1em; }

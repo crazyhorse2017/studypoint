@@ -59,6 +59,29 @@ Each task is sized for one PR (roughly 0.5–2 days). Check a task off only when
 5. **AI**: search, the assistant, and card generation (T1.14, T1.16–T1.21). This needs Workers Paid.
 
 There's no Anki or Quizlet import: Studyflare starts blank.
+
+**Step 6: finish P1 (Option A, agreed with Alex 2026-11-27).** Alex picked the full list, built one sub-step at a time like the earlier steps. His answers to the clarifying questions:
+
+- **6a. Chats** *(built 2026-11-27, A25)*:
+  - Saved conversations, kept until Alex deletes them.
+  - Listed in each course's Ask tab, plus all of them on the Ask page.
+  - Answers stream sentence by sentence, and each sentence appears only after its citations are verified.
+  - A citation opens a **pop-up preview first**, with the quote highlighted. "Open in the file" goes to the page with the quote highlighted (PDF).
+- **6b. Worked problems:**
+  - **WebAssign-style multi-step.** You must type each step's answer and get it right before the next step unlocks.
+  - **Limited tries per step**, like WebAssign. Then the step is shown and the card counts as Again.
+  - AI makes them from worked examples, **plus new variants** with different numbers, checked by the validator. They can also be written by hand.
+  - This needs math answer checking (numeric with tolerance and units, plus equivalent expressions), pulled forward from E2.1.
+- **6c. New versions + source-change flags:**
+  - A "Replace with new version" button on each file.
+  - Uploading a same-named file into the same course asks whether it's a new version.
+  - Cards from changed or removed passages **keep being reviewed with a "source changed" badge**, and a list on Today offers keep, edit, regenerate or retire (T1.22, LIB-10).
+- **6d. Polish:**
+  - Ctrl+K command palette and shortcuts (T1.03)
+  - Course archiving (T1.24b)
+  - Minutes-per-day study budget (T1.20)
+  - Purging deleted files from R2
+  - Accessibility and speed hardening (T1.27)
 - [ ] **T1.01** P1 wireframes (Today, Library, Reader, Assistant, Card tray, Review, Flags) reviewed with Alex — DESIGN §6 · P0 · **done when** Alex approves them
 - [x] **T1.02a** *(done 2026-11-26: built from IPEDS HD2024 (NCES, U.S. federal data, public domain) instead of College Scorecard. It's a smaller file with the same UNITID, name, alias, city, state, level and website fields. Kept: active, degree-granting 2-year and 4-year schools, 4,059 in all, 1,234 of them two-year, 593 KB of JSON at `public/data/institutions.json`. "UMBC" finds University of Maryland-Baltimore County (`umbc.edu`))* `tools/build_institutions.py`: download the federal College Scorecard/IPEDS bulk file and emit `public/data/institutions-<year>.json.gz` (`unitid`, name, aliases, city, state, level, domain). Confirm the licence and that 2-year colleges are included — `INS-01/07` · T0.02 · **done when** the file is built, its size is recorded in ARCHITECTURE A16, and spot checks find UMBC by "UMBC" and a community college by name
 - [x] **T1.02b** *(done 2026-11-26: `ds/Combobox` (APG editable combobox) over `shared/schoolSearch.ts`, which ranks aliases, prefixes, city/state and one-typo matches. There's a "Not listed" form, the school is saved via `GET/PUT /api/school`, and it's shown on Today and in Settings. Search runs on the main thread, which is fast enough for 4k entries, so a Web Worker isn't needed yet)* School picker: directory typeahead in a Web Worker, `Combobox`, "Not listed" form, home school in settings — `INS-01` · T1.02a, T0.18 · **done when** keyboard and screen-reader use passes and the choice persists
@@ -81,8 +104,7 @@ There's no Anki or Quizlet import: Studyflare starts blank.
 - [ ] **Step 5: AI** *(built 2026-11-27, A24)*:
   - **What's in:** processing, OCR, encrypted search indexes, Search, Ask with verified citations and tutor mode, trusted web lookup, a "plan from my material" course planner, study guides with diagrams, flashcard generation with a review tray, and practice quizzes (MCQ, T/F, numeric, short answer) with auto-grading.
   - **Remaining:**
-    - Saved conversations (messages tables)
-    - Streaming answers
+    - ~~Saved conversations~~ and ~~streaming answers~~: done in step 6a
     - Embedding-based duplicate check for generated items
     - The `ai-eval` harness and golden set (T1.26, AGENTS 7)
     - Image occlusion from AI
