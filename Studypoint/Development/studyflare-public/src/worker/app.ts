@@ -14,6 +14,8 @@ import { isOwner } from './owners.ts';
 import { parseAllowedEmails } from './auth/policy.ts';
 import { effectiveEnv, needsSetup, readStoredConfig, writeStoredConfig, type StoredConfig } from './setup/config.ts';
 import { SetupError, runSetup } from './setup/cloudflare.ts';
+import { CardError, MAX_CARD_CHARS, createCard, deleteCard, getStudySettings, listCards, restoreCard, reviewQueue, reviewSummary, setExam, setStudySettings, submitReview, updateCard, upcomingExams } from './cards.ts';
+import { ImportError, importUrl } from './importUrl.ts';
 import { FileError, completeUpload, createUpload, deleteFile, getChunk, getFile, listFiles, putChunk, restoreFile } from './files.ts';
 import { CHUNK_BYTES } from '../shared/fileSniff.ts';
 import { MAX_NOTE_BODY_CHARS, NoteError, createNote, deleteNote, getNote, listNotes, restoreNote, updateNote } from './notes.ts';
@@ -46,6 +48,7 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
 
 /** Note bodies are larger than settings-sized JSON: the body limit plus room for the other fields. */
 const MAX_NOTE_JSON = MAX_NOTE_BODY_CHARS + 16 * 1024;
+const MAX_CARD_JSON = MAX_CARD_CHARS + 16 * 1024;
 
 const needsFiles = () => apiError(503, 'files_unavailable', "File storage isn't connected yet. Turn on R2 for this Studyflare to upload files.");
 
@@ -58,6 +61,26 @@ async function fileCall(fn: () => Promise<Response>): Promise<Response> {
     }
     throw err;
   }
+}
+
+async function cardCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof CardError) return apiError(err.status, 'card_error', err.message);
+    throw err;
+  }
+}
+
+/** Reads a JSON body or answers 400; `then` gets the parsed body. */
+async function withJson(request: Request, then: (body: unknown) => Promise<Response>, max = MAX_JSON_BYTES): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await readJson(request, max);
+  } catch {
+    return apiError(400, 'invalid_json', "That request couldn't be read.");
+  }
+  return then(body);
 }
 
 const chunkIndex = (raw: string | undefined) => (raw !== undefined && /^\d{1,5}$/.test(raw) ? Number(raw) : -1);
@@ -193,6 +216,116 @@ export const ROUTES: readonly Route[] = [
         ? json(await getVault(env.DB, userId))
         : apiError(404, 'not_found', "That passkey isn't on this account.");
     },
+  },
+  {
+    // CRD-01..09: flashcards (encrypted payloads) and FSRS review.
+    method: 'GET',
+    path: '/api/cards',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ cards: await listCards(env.DB, userId, url.searchParams.get('course')) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/cards',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => cardCall(async () => json({ card: await createCard(db, userId, b) }, 201)), MAX_CARD_JSON);
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/cards/:id',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => cardCall(async () => json({ card: await updateCard(db, userId, params['id'] ?? '', b) })), MAX_CARD_JSON);
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/cards/:id',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await deleteCard(env.DB, userId, params['id'] ?? '')) ? json({ deleted: true }) : apiError(404, 'not_found', "That card doesn't exist.");
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/cards/:id/restore',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return (await restoreCard(env.DB, userId, params['id'] ?? '')) ? json({ restored: true }) : apiError(404, 'not_found', "That card isn't in the trash.");
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/review/queue',
+    handler: async ({ env, userId, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json(await reviewQueue(env.DB, userId, url.searchParams.get('course')));
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/review',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => cardCall(async () => json({ state: await submitReview(db, userId, b) })));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/review/summary',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json(await reviewSummary(env.DB, userId));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/study-settings',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ settings: await getStudySettings(env.DB, userId), exams: await upcomingExams(env.DB, userId) });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/study-settings',
+    handler: async ({ request, env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => cardCall(async () => json({ settings: await setStudySettings(db, userId, b) })));
+    },
+  },
+  {
+    // CRD-07: a course's exam date (null clears it).
+    method: 'PUT',
+    path: '/api/courses/:id/exam',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => cardCall(async () => json({ exam: await setExam(db, userId, params['id'] ?? '', (b as Record<string, unknown> | null)?.['at'] ?? null) })));
+    },
+  },
+  {
+    // Import from a link: web pages become readable text, files come back as bytes. The browser then
+    // encrypts and stores them like any upload; nothing fetched is kept on the server.
+    method: 'POST',
+    path: '/api/import-url',
+    handler: async ({ request }) =>
+      withJson(request, async (b) => {
+        try {
+          return await importUrl((b as Record<string, unknown> | null)?.['url']);
+        } catch (err) {
+          if (err instanceof ImportError) return apiError(err.status, 'import_error', err.message);
+          throw err;
+        }
+      }),
   },
   {
     // LIB-02 + AUTH-08: uploaded files. Encrypted in the browser; the Worker stores ciphertext chunks in R2.

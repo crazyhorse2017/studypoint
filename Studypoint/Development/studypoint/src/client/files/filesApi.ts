@@ -10,7 +10,7 @@ import { currentDataKey, currentFingerprintKey } from '../vault/vaultStore.ts';
 
 export type ServerFile = {
   id: string; versionId: string; courseId: string | null; kind: FileKind; mime: string; bytes: number;
-  chunks: number; title: string; status: 'uploading' | 'ready'; createdAt: number;
+  chunks: number; title: string; status: 'uploading' | 'ready'; origin: 'upload' | 'link'; createdAt: number;
 };
 export type FileItem = Omit<ServerFile, 'title'> & { title: string; unreadable: boolean };
 
@@ -84,7 +84,7 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 export type Progress = (done: number, total: number) => void;
 
 /** Check, fingerprint, encrypt and upload one file into a course. Resolves to the new file's id. */
-export async function uploadFile(file: File, courseId: string, onProgress: Progress = () => undefined): Promise<string> {
+export async function uploadFile(file: File, courseId: string, onProgress: Progress = () => undefined, origin: 'upload' | 'link' = 'upload'): Promise<string> {
   const k = key();
   const fpKey = await currentFingerprintKey();
   if (!fpKey) throw new Error('Studyflare is locked. Unlock it to upload files.');
@@ -98,7 +98,7 @@ export async function uploadFile(file: File, courseId: string, onProgress: Progr
   onProgress(0, total);
   try {
     await api('POST', '/api/files', {
-      sourceId, versionId, courseId, kind: sniff.kind, mime: sniff.mime, bytes: bytes.length,
+      sourceId, versionId, courseId, kind: sniff.kind, mime: sniff.mime, bytes: bytes.length, origin,
       contentHash: await fingerprint(fpKey, bytes),
       title: await encryptText(k, titleFromFilename(file.name), `${sourceId}#title`),
     });

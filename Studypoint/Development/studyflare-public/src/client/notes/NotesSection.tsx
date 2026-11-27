@@ -10,10 +10,11 @@ import { UNTITLED, createNote, fetchNotes, type NoteItem } from './notesApi.ts';
 
 const when = (ms: number) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
-export function NotesSection() {
+/** With `course`, the section belongs to that course page: only its notes, and New note goes straight in. */
+export function NotesSection({ course }: { course?: string }) {
   const toast = useToast();
   const { courses } = useStudy();
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<string>(course ?? 'all');
   const [notes, setNotes] = useState<NoteItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -21,8 +22,8 @@ export function NotesSection() {
   const [pickCourse, setPickCourse] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchNotes().then(setNotes, (e) => setError(e instanceof Error ? e.message : 'Your notes couldn’t be loaded.'));
-  }, []);
+    fetchNotes(course ?? null).then(setNotes, (e) => setError(e instanceof Error ? e.message : 'Your notes couldn’t be loaded.'));
+  }, [course]);
 
   const courseLabel = (id: string | null) => {
     const c = courses.find((x) => x.id === id);
@@ -32,7 +33,7 @@ export function NotesSection() {
   const shown = (notes ?? []).filter((n) => filter === 'all' || (filter === 'none' ? n.courseId === null : n.courseId === filter));
 
   const activeCourses = courses.filter((c) => !c.archived).map((c) => ({ value: c.id, label: c.code ? `${c.code} · ${c.name}` : c.name }));
-  const filteredCourse = activeCourses.some((c) => c.value === filter) ? filter : null;
+  const filteredCourse = course ?? (activeCourses.some((c) => c.value === filter) ? filter : null);
 
   /** Every note belongs to a course: use the one being shown, or ask. */
   const newNote = async (courseId: string) => {
@@ -63,7 +64,7 @@ export function NotesSection() {
           <p className="text-sm text-text-2">Encrypted on this device before they’re saved.</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          {activeCourses.length > 0 || hasLooseNotes ? (
+          {!course && (activeCourses.length > 0 || hasLooseNotes) ? (
             <div className="min-w-56">
               <Select label="Show" value={filter} options={options} onChange={setFilter} />
             </div>
@@ -110,7 +111,7 @@ export function NotesSection() {
               <Link to={`/notes/${n.id}`} className="flex flex-wrap items-baseline justify-between gap-3 py-3 hover:text-accent">
                 <span className={n.unreadable ? 'text-danger' : n.title ? 'text-text' : 'text-text-3'}>{n.title || UNTITLED}</span>
                 <span className="flex items-baseline gap-2 text-sm text-text-3">
-                  {courseLabel(n.courseId) ? <span className="font-mono">{courseLabel(n.courseId)}</span> : null}
+                  {!course && courseLabel(n.courseId) ? <span className="font-mono">{courseLabel(n.courseId)}</span> : null}
                   <span>{when(n.updatedAt)}</span>
                 </span>
               </Link>

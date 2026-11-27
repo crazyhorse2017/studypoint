@@ -108,6 +108,12 @@ Each phase ends with a usable app. Later phases MUST NOT require migrating data 
   Partial failures name the failing pages.
 - **LIB-06 MUST** — Original files are stored and viewable. Clicking a citation opens the original at the cited page or slide, with the passage highlighted where possible.
 - **LIB-07 MUST** — Search across the library is hybrid: keyword (full-text) plus semantic (vector). It can be filtered by course, topic, tag, source type and privacy flag.
+- **LIB-02b MUST (added 2026-11-27)** — **Import from a link.** Paste a web address into a course's Files tab:
+  - A web page is saved as readable text (headings, lists, tables), with a link back to the original and the date.
+  - A link to a PDF, Word, PowerPoint or image is saved as that file.
+  - Imports are encrypted like uploads, and nothing fetched is kept on the server.
+  - Pages that need JavaScript or a sign-in say so.
+  - Making cards and summaries from imported material comes in step 5 (AI).
 - **LIB-02 note (2026-11-27)** — Uploads (PDF, DOCX, PPTX, Markdown, PNG/JPEG/WebP, up to 100 MB) are type-checked and **encrypted in the browser** before upload, and each belongs to a course. iPhone HEIC photos are refused with a hint to use JPEG ("Most Compatible"). See ARCHITECTURE A22.
 - **LIB-01b MUST** *(added 2026-11-26)* — **Personal subjects.** Besides college courses, Alex can add a subject he's learning for its own sake (e.g. "Astronomy"). It has just a name, with no school and no course code, and works everywhere a course does: notes, uploads, cards and review. It doesn't need a home school to be chosen first. Stored as `courses.kind = 'personal'` (migration 0006).
 - **LIB-08 MUST** — Notes written in Studyflare support Markdown, KaTeX math and links to sources and passages. They are sources too (privacy `personal` by default).

@@ -7,6 +7,7 @@ import { AppShell } from './shell/AppShell.tsx';
 import { ComingSoonPage, NotFoundPage, TodayPage } from './pages/TodayPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { LibraryPage } from './pages/LibraryPage.tsx';
+import { GettingStartedPage } from './pages/GettingStartedPage.tsx';
 
 // Gallery: dev/preview only. Vite replaces import.meta.env at build time, so in production this is
 // `false && …` and the gallery chunk is never built (checked in CI).
@@ -17,15 +18,20 @@ const GalleryPage = SHOW_GALLERY ? lazy(() => import('./pages/GalleryPage.tsx'))
 const NotePage = lazy(() => import('./notes/NotePage.tsx'));
 // The Reader brings pdf.js and the unzipper, so it also loads only when a file is opened.
 const ReaderPage = lazy(() => import('./reader/ReaderPage.tsx'));
+// Course pages and reviews bring KaTeX and the scheduler.
+const CoursePage = lazy(() => import('./courses/CoursePage.tsx'));
+const ReviewPage = lazy(() => import('./cards/ReviewPage.tsx'));
 
 type RouteDef = { path: string; render: (params: Record<string, string>) => ReactNode };
 
 const ROUTES: readonly RouteDef[] = [
   { path: '/', render: () => <TodayPage /> },
+  { path: '/setup', render: () => <GettingStartedPage /> },
   { path: '/library', render: () => <LibraryPage /> },
+  { path: '/courses/:id', render: (p) => <CoursePage id={p['id'] ?? ''} /> },
   { path: '/notes/:id', render: (p) => <NotePage id={p['id'] ?? ''} /> },
   { path: '/files/:id', render: (p) => <ReaderPage id={p['id'] ?? ''} /> },
-  { path: '/review', render: () => <ComingSoonPage title="Review" what="Flashcard reviews, scheduled with FSRS, arrive in the next phase." /> },
+  { path: '/review', render: () => <ReviewPage /> },
   { path: '/assistant', render: () => <ComingSoonPage title="Ask" what="The study assistant, which answers from your own sources with citations, arrives in the next phase." /> },
   { path: '/settings', render: () => <SettingsPage /> },
   ...(GalleryPage ? [{ path: '/ds', render: () => <GalleryPage /> }] : []),

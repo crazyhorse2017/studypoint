@@ -12,6 +12,7 @@ import { useStudy } from '../studyStore.ts';
 import { KIND_LABEL, deleteFile, fetchFile, openFile, restoreFile, type FileItem } from '../files/filesApi.ts';
 import { imageMime, parseDocx, parsePptx, type Block, type Entries, type Run } from './ooxml.ts';
 import { PdfView } from './PdfView.tsx';
+import { MarkdownView } from './MarkdownView.tsx';
 
 const EXT: Record<string, string> = {
   'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'text/markdown': '.md',
@@ -236,7 +237,7 @@ export default function ReaderPage({ id }: { id: string }) {
     );
   } else if (file.kind === 'pdf') body = <PdfView bytes={bytes} initialPage={initialPage} />;
   else if (file.kind === 'image') body = <ImageView bytes={bytes} mime={file.mime} title={file.title} />;
-  else if (file.kind === 'md') body = <pre className="reading mx-auto whitespace-pre-wrap font-[inherit]">{new TextDecoder().decode(bytes)}</pre>;
+  else if (file.kind === 'md') body = <MarkdownView text={new TextDecoder().decode(bytes)} />;
   else if (!entries) body = <p className="text-danger">This file couldn’t be unpacked. It may be damaged. Try downloading it.</p>;
   else body = file.kind === 'docx' ? <DocxView entries={entries} /> : <PptxView entries={entries} initialSlide={initialPage} />;
 
@@ -259,7 +260,7 @@ export default function ReaderPage({ id }: { id: string }) {
         <h1 className="text-[2.125rem] leading-tight font-semibold break-words">{file?.title ?? 'Opening…'}</h1>
         {file ? (
           <p className="text-sm text-text-2">
-            {KIND_LABEL[file.kind]} · {formatBytes(file.bytes)}
+            {file.origin === 'link' && file.kind === 'md' ? 'Web page' : KIND_LABEL[file.kind]} · {formatBytes(file.bytes)}
             {course ? ` · ${course.code ?? course.name}` : ''} · encrypted
           </p>
         ) : null}

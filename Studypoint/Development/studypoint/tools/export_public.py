@@ -24,7 +24,8 @@ INCLUDE = ["src", "public", "migrations", "index.html", "package.json", "tsconfi
 SKIP_NAMES = {".applied-hashes", "node_modules", "dist", ".wrangler", "__pycache__"}
 REPLACE = {"wrangler.jsonc": ROOT / "deploy" / "public" / "wrangler.jsonc", "README.md": ROOT / "deploy" / "public" / "README.md"}
 
-EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+# A real address ends in a letter TLD (.com, .edu …); "package@6.0.1" version strings don't.
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b")
 SAFE_EMAIL_DOMAINS = ("example.com", "example.edu", "example.org", ".invalid")
 TEXT_SUFFIXES = {".ts", ".tsx", ".css", ".html", ".json", ".jsonc", ".sql", ".md", ".svg", ".txt"}
 

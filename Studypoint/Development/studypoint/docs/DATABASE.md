@@ -533,6 +533,15 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
+-- Migration 0007 (2026-11-27): flashcard review (step 4, ARCHITECTURE A23).
+-- ALTER TABLE settings ADD COLUMN new_per_day INTEGER NOT NULL DEFAULT 20 CHECK (new_per_day BETWEEN 0 AND 200);
+-- ALTER TABLE card_states ADD COLUMN learning_steps INTEGER NOT NULL DEFAULT 0;   -- FSRS 6 (re)learning step position
+-- CREATE INDEX idx_card_states_new ON card_states(user_id, state);
+-- CREATE INDEX idx_deadlines_user_due ON deadlines(user_id, due_at);
+-- Cards: front_md = encrypted payload (sf1, AAD "<card id>#card"); back_md NULL; data_json '{}'. Typed answers
+-- are type 'basic' with answerMode 'typed' INSIDE the payload. Exams are `deadlines` rows (kind 'exam',
+-- origin 'manual', one per course). Imported links are sources with origin 'lookup_url' (content encrypted).
+
 -- Uploaded files (step 2b, 2026-11-27, ARCHITECTURE A22) use the existing tables, no migration:
 --   sources: kind pdf/docx/pptx/image/md, origin 'upload', privacy 'personal', title = sf1 envelope
 --            (AAD "<source id>#title"), current_version_id → the version below.

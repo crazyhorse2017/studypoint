@@ -6,33 +6,35 @@ import { Button, FileDrop, Select, useToast } from '../ds/index.ts';
 import { formatBytes } from '../ds/fileRules.ts';
 import { Link } from '../Link.tsx';
 import { useStudy } from '../studyStore.ts';
+import { ImportLink } from './ImportLink.tsx';
 import { DuplicateFile, KIND_LABEL, deleteFile, fetchFiles, restoreFile, uploadFile, type FileItem } from './filesApi.ts';
 
 type Job = { name: string; done: number; total: number; error: string | null };
 
-export function FilesSection() {
+/** With `course`, the section belongs to that course page: no course picker, only its files. */
+export function FilesSection({ course }: { course?: string }) {
   const toast = useToast();
   const { courses } = useStudy();
   const active = courses.filter((c) => !c.archived);
   const options = active.map((c) => ({ value: c.id, label: c.code ? `${c.code} · ${c.name}` : c.name }));
-  const [courseId, setCourseId] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(course ?? null);
   const [files, setFiles] = useState<FileItem[] | null>(null);
   const [storage, setStorage] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const refresh = useCallback(() => {
-    fetchFiles().then(
+    fetchFiles(course ?? null).then(
       (r) => {
         setFiles(r.files);
         setStorage(r.storage);
       },
       (e) => setError(e instanceof Error ? e.message : 'Your files couldn’t be loaded.'),
     );
-  }, []);
+  }, [course]);
   useEffect(refresh, [refresh]);
 
-  const target = courseId ?? (active.length === 1 ? (active[0]?.id ?? null) : null);
+  const target = course ?? courseId ?? (active.length === 1 ? (active[0]?.id ?? null) : null);
 
   const upload = async (picked: File[]) => {
     if (!target) return;
@@ -83,7 +85,7 @@ export function FilesSection() {
         <p className="text-sm text-text-2">Add a course or subject first. Every file belongs to one.</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {active.length > 1 ? (
+          {!course && active.length > 1 ? (
             <div className="max-w-md">
               <Select label="Upload into" value={courseId} placeholder="Choose a course" options={options} onChange={setCourseId} />
             </div>
@@ -94,6 +96,7 @@ export function FilesSection() {
             onFiles={(f) => void upload(f)}
             onRejected={(reasons) => toast.show({ message: reasons.join(' '), tone: 'error' })}
           />
+          {target ? <ImportLink courseId={target} onImported={refresh} /> : null}
         </div>
       )}
 
@@ -139,9 +142,9 @@ export function FilesSection() {
                 <span className="text-text-2">{f.title} · upload didn’t finish</span>
               )}
               <span className="flex items-center gap-3 text-sm text-text-3">
-                <span>{KIND_LABEL[f.kind]}</span>
+                <span>{f.origin === 'link' && f.kind === 'md' ? 'Web page' : KIND_LABEL[f.kind]}{f.origin === 'link' ? ' · from a link' : ''}</span>
                 <span>{formatBytes(f.bytes)}</span>
-                {courseName(f.courseId) ? <span className="font-mono">{courseName(f.courseId)}</span> : null}
+                {!course && courseName(f.courseId) ? <span className="font-mono">{courseName(f.courseId)}</span> : null}
                 <Button size="sm" variant="ghost" aria-label={`Delete ${f.title}`} onClick={() => void remove(f)}>
                   Delete
                 </Button>

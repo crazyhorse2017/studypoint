@@ -9,7 +9,7 @@ import { FileError, completeUpload, createUpload, deleteFile, getChunk, getFile,
 type TestFn = (name: string, fn: () => void | Promise<void>) => void;
 type Assert = { ok(c: unknown, m?: string): void; equal(a: unknown, b: unknown, m?: string): void; deepEqual(a: unknown, b: unknown, m?: string): void };
 
-type Src = { id: string; user_id: string; course_id: string; title: string; kind: string; current_version_id: string; created_at: number; deleted_at: number | null };
+type Src = { id: string; user_id: string; course_id: string; title: string; kind: string; origin: string; current_version_id: string; created_at: number; deleted_at: number | null };
 type Ver = { id: string; source_id: string; content_hash: string; mime: string; bytes: number; status: string };
 
 function fakes() {
@@ -19,7 +19,7 @@ function fakes() {
   const courses = new Set(['u1:c1', 'u2:c2']);
   const joined = (userId: unknown) => [...sources.values()].filter((s) => s.user_id === userId && s.deleted_at === null).map((s) => {
     const v = versions.get(s.current_version_id) as Ver;
-    return { id: s.id, version_id: v.id, course_id: s.course_id, kind: s.kind, mime: v.mime, bytes: v.bytes, title: s.title, status: v.status, created_at: s.created_at };
+    return { id: s.id, version_id: v.id, course_id: s.course_id, kind: s.kind, mime: v.mime, bytes: v.bytes, title: s.title, status: v.status, origin: s.origin, created_at: s.created_at };
   });
   const stmt = (sql: string, a: unknown[] = []) => ({
     sql, a,
@@ -39,7 +39,7 @@ function fakes() {
       throw new Error('unexpected first: ' + sql);
     },
     async all() {
-      if (sql.includes("s.origin = 'upload'")) return { results: joined(a[0]).filter((r) => a.length < 2 || r.course_id === a[1]) };
+      if (sql.includes("s.origin IN ('upload','lookup_url')")) return { results: joined(a[0]).filter((r) => a.length < 2 || r.course_id === a[1]) };
       throw new Error('unexpected all: ' + sql);
     },
     async run() {
@@ -60,7 +60,7 @@ function fakes() {
     prepare: (sql: string) => stmt(sql),
     async batch(list: Array<{ sql: string; a: unknown[] }>) {
       for (const { sql, a } of list) {
-        if (sql.startsWith('INSERT INTO sources')) sources.set(a[0] as string, { id: a[0] as string, user_id: a[1] as string, course_id: a[2] as string, title: a[3] as string, kind: a[4] as string, current_version_id: a[5] as string, created_at: a[6] as number, deleted_at: null });
+        if (sql.startsWith('INSERT INTO sources')) sources.set(a[0] as string, { id: a[0] as string, user_id: a[1] as string, course_id: a[2] as string, title: a[3] as string, kind: a[4] as string, origin: a[5] as string, current_version_id: a[6] as string, created_at: a[7] as number, deleted_at: null });
         else if (sql.startsWith('INSERT INTO source_versions')) versions.set(a[0] as string, { id: a[0] as string, source_id: a[1] as string, content_hash: a[2] as string, mime: a[4] as string, bytes: a[5] as number, status: 'uploading' });
         else throw new Error('unexpected batch: ' + sql);
       }
@@ -123,6 +123,15 @@ export function register(test: TestFn, assert: Assert): void {
     assert.equal(await status(putChunk(db, bucket, 'u1', m.versionId, 1, sealedChunk(10))), 409, 'no writes after completion');
     assert.ok(await getChunk(db, bucket, 'u1', m.versionId, 1));
     assert.equal(await status(getChunk(db, bucket, 'u2', m.versionId, 1)), 404);
+  });
+
+  test('files (link import): imported pages are stored as origin lookup_url and listed as from a link', async () => {
+    const { db, sources } = fakes();
+    const m = await meta({ origin: 'link', kind: 'md', mime: 'text/markdown', bytes: 2000, contentHash: 'b'.repeat(64) });
+    const f = await createUpload(db, 'u1', m);
+    assert.equal(f.origin, 'link');
+    assert.equal(sources.get(m.sourceId)?.origin, 'lookup_url');
+    assert.equal((await listFiles(db, 'u1'))[0]?.origin, 'link');
   });
 
   test('files: the same file (same fingerprint) is refused as a duplicate, until the first is deleted', async () => {

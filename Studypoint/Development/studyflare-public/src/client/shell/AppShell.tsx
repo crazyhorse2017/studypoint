@@ -7,20 +7,30 @@ import { Link } from '../Link.tsx';
 import { isActive } from '../../shared/routeMatch.ts';
 import { useStudy } from '../studyStore.ts';
 
-function SidebarCourses() {
+function SidebarCourses({ pathname }: { pathname: string }) {
   const { courses } = useStudy();
   const active = courses.filter((c) => !c.archived);
-  if (active.length === 0) return <p className="text-sm text-text-2">Courses you add appear here.</p>;
+  if (active.length === 0) {
+    return (
+      <p className="text-sm text-text-2">
+        Courses you add appear here.{' '}
+        <Link to="/setup" className="text-accent underline underline-offset-2">Get started</Link>
+      </p>
+    );
+  }
   return (
     <ul className="flex flex-col gap-1">
-      {active.map((c) => (
-        <li key={c.id}>
-          <Link to="/library" className="flex flex-col rounded-md px-2 py-1.5 hover:bg-sunken">
-            {c.code ? <span className="font-mono text-xs text-text-3">{c.code}</span> : null}
-            <span className="text-sm text-text">{c.title ?? c.name}</span>
-          </Link>
-        </li>
-      ))}
+      {active.map((c) => {
+        const here = pathname === `/courses/${c.id}`;
+        return (
+          <li key={c.id}>
+            <Link to={`/courses/${c.id}`} aria-current={here ? 'page' : undefined} className={cx('flex flex-col rounded-md px-2 py-1.5 hover:bg-sunken', here && 'bg-sunken')}>
+              {c.code ? <span className="font-mono text-xs text-text-3">{c.code}</span> : null}
+              <span className="text-sm text-text">{c.name}</span>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -78,7 +88,7 @@ export function AppShell({ pathname, children }: { pathname: string; children: R
       <div className="mx-auto flex max-w-[1440px]">
         <aside aria-label="Courses" className="hidden w-[264px] shrink-0 border-r border-border px-4 py-6 xl:block">
           <h2 className="mb-2 text-xs font-semibold tracking-wide text-text-3 uppercase">Courses</h2>
-          <SidebarCourses />
+          <SidebarCourses pathname={pathname} />
         </aside>
         <main id="main" className="min-w-0 flex-1 px-4 pt-8 pb-24 sm:px-8 md:pb-12">
           {children}

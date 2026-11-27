@@ -2,7 +2,9 @@
 // with ingestion (needs Workers Paid). Archiving puts a finished semester away (LIB-12).
 
 import { useState } from 'react';
-import { Button, ConfirmDialog, Menu, TextField, useToast } from '../ds/index.ts';
+import { Button, ConfirmDialog, Menu, Tabs, TextField, useToast } from '../ds/index.ts';
+import { Link } from '../Link.tsx';
+import { navigate, useLocation } from '../router.ts';
 import { removeCourse, renameCourse, setArchived, useStudy, type Course } from '../studyStore.ts';
 import { AddCourse } from './AddCourse.tsx';
 import { NotesSection } from '../notes/NotesSection.tsx';
@@ -36,14 +38,14 @@ function CourseRow({ c }: { c: Course }) {
           </Button>
         </form>
       ) : (
-        <div className="flex min-w-0 flex-col">
+        <Link to={`/courses/${c.id}`} className="flex min-w-0 flex-1 flex-col hover:text-accent">
           <span className="flex items-baseline gap-2">
             {c.code ? <span className="font-mono text-sm text-text-2">{c.code}</span> : null}
             <span className="text-text">{c.name}</span>
             {c.archived ? <span className="rounded-sm bg-sunken px-1.5 text-xs text-text-2">Archived</span> : null}
           </span>
           <span className="text-sm text-text-3">{c.school ? c.school.name : 'Personal subject'}</span>
-        </div>
+        </Link>
       )}
       {!renaming ? (
         <Menu
@@ -83,20 +85,16 @@ function CourseRow({ c }: { c: Course }) {
   );
 }
 
-export function LibraryPage() {
+type LibTab = 'courses' | 'files' | 'notes';
+
+function CoursesTab() {
   const { loaded, school, courses } = useStudy();
   const active = courses.filter((c) => !c.archived);
   const archived = courses.filter((c) => c.archived);
-
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-[2.125rem] leading-tight font-semibold">Library</h1>
-        <p className="text-text-2">Your courses, files and notes.</p>
-      </div>
-      <FilesSection />
-      <NotesSection />
+    <div className="flex flex-col gap-8">
       {!loaded ? <p className="text-text-2">Loading…</p> : null}
+      {loaded && active.length === 0 ? <p className="text-text-2">No courses yet. Add one below, or use Getting started.</p> : null}
       {active.length > 0 ? (
         <section aria-labelledby="courses-heading" className="rounded-lg border border-border bg-surface px-5">
           <h2 id="courses-heading" className="sr-only">
@@ -129,6 +127,31 @@ export function LibraryPage() {
           </ul>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+/** Library: every course (each opens its own page), plus all files and all notes across courses. */
+export function LibraryPage() {
+  const { search } = useLocation();
+  const raw = search.get('tab');
+  const tab: LibTab = raw === 'files' || raw === 'notes' ? raw : 'courses';
+  return (
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[2.125rem] leading-tight font-semibold">Library</h1>
+        <p className="text-text-2">Open a course to work in it, or browse everything here.</p>
+      </div>
+      <Tabs
+        label="Library sections"
+        value={tab}
+        onChange={(t) => navigate(t === 'courses' ? '/library' : `/library?tab=${t}`, { replace: true })}
+        tabs={[
+          { value: 'courses', label: 'Courses', panel: <CoursesTab /> },
+          { value: 'files', label: 'All files', panel: <FilesSection /> },
+          { value: 'notes', label: 'All notes', panel: <NotesSection /> },
+        ]}
+      />
     </div>
   );
 }

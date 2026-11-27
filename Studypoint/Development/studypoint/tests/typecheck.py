@@ -64,12 +64,13 @@ TYPE_PACKAGES = [
     "katex",
     "pdfjs-dist",
     "fflate",
+    "ts-fsrs",
 ]
 # Transitive type-only dependencies (resolved from the dependent package's package.json).
 TRANSITIVE = {"@types/react": ["csstype"]}
 # Packages whose whole dependency tree is needed for types (the editor: Tiptap re-exports ProseMirror
 # types, and each StarterKit extension is its own package). Followed recursively; react is already present.
-RECURSIVE = {"@tiptap/react", "@tiptap/pm", "@tiptap/starter-kit", "@tiptap/extension-mathematics", "@tiptap/extensions"}
+RECURSIVE = {"@tiptap/react", "@tiptap/pm", "@tiptap/starter-kit", "@tiptap/extension-mathematics", "@tiptap/extensions", "ts-fsrs"}
 SKIP_RECURSIVE = {"react", "react-dom", "@types/react", "@types/react-dom", "@tiptap/core", "@tiptap/pm", "katex", "commander"}
 
 
