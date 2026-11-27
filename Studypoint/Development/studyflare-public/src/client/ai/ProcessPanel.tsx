@@ -14,6 +14,14 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
   const [running, setRunning] = useState(false);
   const [line, setLine] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  // Live elapsed time: OCR of one page takes up to ~90 s on the free models, so show that it's working.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (startedAt === null) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
   // Held in a ref so a new callback each render doesn't re-run the check (and loop).
   const cb = useRef(onChecked);
   cb.current = onChecked;
@@ -34,6 +42,7 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
   const run = async () => {
     if (!state) return;
     setRunning(true);
+    setStartedAt(Date.now());
     setErrors([]);
     const errs: string[] = [];
     for (const [i, s] of state.stale.entries()) {
@@ -47,6 +56,7 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
     setErrors(errs);
     setLine(null);
     setRunning(false);
+    setStartedAt(null);
     await check();
   };
 
@@ -72,9 +82,13 @@ export function ProcessPanel({ courseId, onChecked }: { courseId: string; onChec
         ) : null}
       </div>
       {line ? (
-        <p className="text-sm text-text-2" aria-live="polite">
-          {line}. <strong className="text-text">Keep this tab open</strong> (other pages of Studyflare are fine). If it reloads, press Process again: pages already read are remembered.
-        </p>
+        <div className="flex flex-col gap-1 text-sm text-text-2">
+          <p aria-live="polite">{line}</p>
+          <p>
+            Working for {startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0} s. Reading a photo or scanned page with OCR takes <strong className="text-text">up to about 1½ minutes per page</strong>; typed PDFs, slides and notes take seconds.{' '}
+            <strong className="text-text">Keep this tab open</strong> (other Studyflare pages are fine). If it does reload, press Process again: pages already read are remembered.
+          </p>
+        </div>
       ) : null}
       {errors.length ? (
         <ul className="text-sm text-danger">

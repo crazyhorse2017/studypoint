@@ -123,7 +123,8 @@ export async function ocr(env: AiEnv, userId: string, dataUrl: string): Promise<
   try {
     res = await ai(env).run(modelFor(env, 'ocr') as keyof AiModels, {
       messages: [{ role: 'user', content: [{ type: 'text', text: OCR_PROMPT }, { type: 'image_url', image_url: { url: dataUrl } }] }],
-      max_tokens: 3000,
+      // A dense handwritten page is ~800–1,500 tokens; 2,000 caps the worst-case wait (~90 s on the free model).
+      max_tokens: 2000,
       temperature: 0,
     } as never);
   } catch (err) {

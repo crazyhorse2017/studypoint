@@ -206,7 +206,7 @@ function pptxUnits(bytes: Uint8Array): Unit[] {
 export async function fileUnits(kind: string, mime: string, bytes: Uint8Array, progress: Progress, cacheKey: string): Promise<Unit[]> {
   if (kind === 'pdf') return pdfUnits(bytes, progress, cacheKey);
   if (kind === 'image') {
-    progress('Reading the photo with OCR');
+    progress('Reading the photo with OCR (this can take a minute)');
     return photoUnits(bytes, mime, cacheKey);
   }
   if (kind === 'docx') return docxUnits(bytes);
