@@ -1,4 +1,4 @@
-// One course (or personal subject): Overview, Files, Notes and Cards, each in its own tab. The tab is kept
+// One course (or personal subject): Overview, Plan (step 6b), Files, Notes, Cards and more, each in its own tab. The tab is kept
 // in the URL (?tab=cards), so a reload or a link opens the same place.
 
 import { useEffect, useState } from 'react';
@@ -14,9 +14,10 @@ import { ExamDate } from './ExamDate.tsx';
 import { QuizzesSection } from '../quizzes/QuizzesSection.tsx';
 import { AskPanel } from '../ai/AskPanel.tsx';
 import { CreatePanel } from '../ai/CreatePanel.tsx';
+import { PlanPanel } from '../plans/PlanPanel.tsx';
 
-type Tab = 'overview' | 'files' | 'notes' | 'cards' | 'quizzes' | 'ask' | 'create';
-const TABS: readonly Tab[] = ['overview', 'files', 'notes', 'cards', 'quizzes', 'ask', 'create'];
+type Tab = 'overview' | 'plan' | 'files' | 'notes' | 'cards' | 'quizzes' | 'ask' | 'create';
+const TABS: readonly Tab[] = ['overview', 'plan', 'files', 'notes', 'cards', 'quizzes', 'ask', 'create'];
 
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -38,6 +39,9 @@ function Overview({ courseId }: { courseId: string }) {
         <div className="flex flex-wrap gap-3">
           <Link to={`/review?course=${encodeURIComponent(courseId)}`} className="inline-flex min-h-10 items-center rounded-md bg-accent px-4 font-semibold text-on-accent hover:opacity-90">
             Review this course
+          </Link>
+          <Link to={`/courses/${courseId}?tab=plan`} className="inline-flex min-h-10 items-center rounded-md border border-border-strong px-4 text-text hover:bg-sunken">
+            Study plan
           </Link>
           <Link to={`/courses/${courseId}?tab=cards`} className="inline-flex min-h-10 items-center rounded-md border border-border-strong px-4 text-text hover:bg-sunken">
             Make cards
@@ -105,6 +109,7 @@ export default function CoursePage({ id }: { id: string }) {
         onChange={(t) => navigate(`/courses/${id}${t === 'overview' ? '' : `?tab=${t}`}`, { replace: true })}
         tabs={[
           { value: 'overview', label: 'Overview', panel: <Overview courseId={id} /> },
+          { value: 'plan', label: 'Plan', panel: <PlanPanel courseId={id} courseName={course.name} /> },
           { value: 'files', label: 'Files', panel: <FilesSection course={id} /> },
           { value: 'notes', label: 'Notes', panel: <NotesSection course={id} /> },
           { value: 'cards', label: 'Cards', panel: <CardsSection courseId={id} /> },

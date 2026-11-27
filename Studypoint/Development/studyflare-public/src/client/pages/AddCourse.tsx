@@ -1,11 +1,14 @@
 // Add a course (INS-02, DESIGN §6 first run). By code + title now; the automatic catalog lookup arrives in P2.
-// The other ways to start a course say plainly what they're waiting for.
+// Step 6b: adding a course starts its study plan: a practice test is made in the background from trusted
+// websites about it, and the plan is built from your score.
 
 import { useMemo, useState } from 'react';
 import { Button, SegmentedControl, TextField } from '../ds/index.ts';
 import { checkCourseCode, learnFormat } from '../../shared/courseCode.ts';
 import { addCourse, useStudy } from '../studyStore.ts';
 import { Link } from '../Link.tsx';
+import { startPlan } from '../plans/planApi.ts';
+import { kickPlansSoon } from '../plans/planJobs.ts';
 
 type Kind = 'college' | 'personal';
 
@@ -36,7 +39,9 @@ export function AddCourse({ onAdded }: { onAdded?: () => void }) {
     }
     setSaving(true);
     try {
-      await addCourse({ kind, code: kind === 'personal' ? '' : code, title });
+      const course = await addCourse({ kind, code: kind === 'personal' ? '' : code, title });
+      // The practice test is made in the background; a failure here just means no plan yet.
+      void startPlan(course.id, course.name).then(kickPlansSoon, () => undefined);
       setCode('');
       setTitle('');
       onAdded?.();
@@ -101,23 +106,9 @@ export function AddCourse({ onAdded }: { onAdded?: () => void }) {
         </div>
       </form>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-4">
-        <p className="text-sm font-semibold text-text-2">Other ways to add course material</p>
-        <ul className="grid gap-2 text-sm text-text-2 sm:grid-cols-3">
-          <li className="rounded-md border border-dashed border-border-strong p-3">
-            <span className="block text-text">Upload files</span>
-            PDFs, slides and notes. Turns on once file storage is enabled (Workers Paid).
-          </li>
-          <li className="rounded-md border border-dashed border-border-strong p-3">
-            <span className="block text-text">Paste a link</span>
-            Needs file storage and AI reading, enabled with Workers Paid.
-          </li>
-          <li className="rounded-md border border-dashed border-border-strong p-3">
-            <span className="block text-text">Look up a topic</span>
-            Trusted-source search, plus automatic catalog lookup by code, arrives in the next phase.
-          </li>
-        </ul>
-      </div>
+      <p className="border-t border-border pt-4 text-sm text-text-2">
+        Once it’s added, Studyflare makes a <strong className="text-text">20-question practice test</strong> from trusted websites about the course, in the background. Take it from the course’s Plan tab and you get a day-by-day study plan built around what you missed. Add your own files any time: the plan uses them once they’re processed.
+      </p>
     </div>
   );
 }

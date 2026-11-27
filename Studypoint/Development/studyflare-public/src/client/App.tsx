@@ -1,6 +1,7 @@
 // App routes (T0.19). The app ships blank (LIB-12): no courses, subjects or sample content, ever.
 
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { PlanStatus } from './plans/PlanStatus.tsx';
 import { ToastProvider } from './ds/index.ts';
 import { matchPath, useFocusMainHeading, useLocation } from './router.ts';
 import { AppShell } from './shell/AppShell.tsx';
@@ -43,12 +44,28 @@ const ROUTES: readonly RouteDef[] = [
 export function App() {
   const { pathname } = useLocation();
   useFocusMainHeading(pathname);
+  // Step 6b: study-plan work runs in the background while unlocked (loaded after first paint).
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void import('./plans/planRunner.ts').then((m) => {
+        if (!cancelled) stop = m.startPlanRunner();
+      });
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+      stop?.();
+    };
+  }, []);
   const hit = ROUTES.map((r) => ({ r, params: matchPath(r.path, pathname) })).find((m) => m.params !== null);
 
   return (
     <ToastProvider>
       <AppShell pathname={pathname}>
         <Suspense fallback={<p className="text-text-2">Loading…</p>}>{hit ? hit.r.render(hit.params ?? {}) : <NotFoundPage />}</Suspense>
+        <PlanStatus />
       </AppShell>
     </ToastProvider>
   );

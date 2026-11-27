@@ -70,6 +70,9 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
+/** The current courses outside React (for background work). */
+export const studySnapshot = (): State => state;
+
 export function useStudy(): State {
   return useSyncExternalStore(subscribe, () => state, () => state);
 }

@@ -59,6 +59,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'deadlines', scope: 'user_id = ?1' },
   { name: 'deadline_topics', scope: viaParent('deadline_id', 'deadlines') },
   { name: 'goals', scope: 'user_id = ?1' },
+  // Step 6b: one encrypted study plan per course.
+  { name: 'study_plans', scope: 'user_id = ?1' },
   { name: 'lookups', scope: 'user_id = ?1' },
 ];
 

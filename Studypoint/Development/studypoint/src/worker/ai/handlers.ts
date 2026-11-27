@@ -2,10 +2,10 @@
 // request, runs it through the gateway, and returns the result; nothing sent is stored (only usage counts
 // and a generations row with sizes, model and prompt version, never content).
 
-import { extractJson, parseArticle, parseCards, parseDiagram, parseGrade, parsePlan, parseQuiz, parseVerdicts } from '../../shared/aiOutput.ts';
+import { extractJson, parseArticle, parseCards, parseDiagram, parseGrade, parsePlan, parseQuiz, parseTopics, parseVerdicts } from '../../shared/aiOutput.ts';
 import { uuid7 } from '../../shared/uuid7.ts';
 import { AiError, complete, completeStream, embed, modelFor, ocr, type AiEnv } from './gateway.ts';
-import { PROMPT_VERSIONS, answerPrompt, articlePrompt, cardsPrompt, diagramPrompt, gradePrompt, planPrompt, quizPrompt, validatePrompt, type Passage } from './prompts.ts';
+import { PROMPT_VERSIONS, answerPrompt, articlePrompt, cardsPrompt, diagramPrompt, gradePrompt, planPrompt, quizPrompt, topicsPrompt, validatePrompt, type Passage } from './prompts.ts';
 
 const MAX_PASSAGES = 40;
 const MAX_PASSAGE_CHARS = 6000;
@@ -106,7 +106,7 @@ export async function handleAnswerStream(env: AiEnv, userId: string, b: Record<s
   return new Response(body, { status: 200, headers: STREAM_HEADERS });
 }
 
-type GenKind ='cards' | 'quiz' | 'article' | 'diagram' | 'plan';
+type GenKind = 'cards' | 'quiz' | 'article' | 'diagram' | 'plan' | 'topics';
 
 export async function handleGenerate(env: AiEnv, userId: string, b: Record<string, unknown>) {
   const kind = b['kind'] as GenKind;
@@ -115,11 +115,19 @@ export async function handleGenerate(env: AiEnv, userId: string, b: Record<strin
   let messages;
   let version: string;
   let maxTokens = 3500;
+  // Step 6b: everything but study guides thinks at low effort (2–3× faster; the checker still reviews items).
+  let effort: 'low' | 'medium' = 'low';
   if (kind === 'plan') {
     const outline = s(b['outline'], 60_000);
     if (outline.length < 20) throw new AiError(400, 'Process some files in this course first.');
     messages = planPrompt(outline, s(b['courseName'], 200));
     version = PROMPT_VERSIONS.plan;
+    maxTokens = 2000;
+  } else if (kind === 'topics') {
+    // A course's main topics from trusted web pages (the automatic practice test, step 6b).
+    messages = topicsPrompt(readPassages(b['passages']), s(b['courseName'], 200), clampInt(b['count'], 3, 12, 8));
+    version = PROMPT_VERSIONS.topics;
+    maxTokens = 1200;
   } else {
     const passages = readPassages(b['passages']);
     if (kind === 'cards') {
@@ -135,13 +143,14 @@ export async function handleGenerate(env: AiEnv, userId: string, b: Record<strin
       messages = articlePrompt(passages, topic || 'the main ideas', b['length'] === 'medium' ? 'medium' : 'short');
       version = PROMPT_VERSIONS.article;
       maxTokens = 4500;
+      effort = 'medium';
     } else if (kind === 'diagram') {
       messages = diagramPrompt(passages, topic || 'the main ideas');
       version = PROMPT_VERSIONS.diagram;
       maxTokens = 1500;
     } else throw new AiError(400, 'Unknown kind of material.');
   }
-  const text = await complete(env, userId, 'generate', messages, { maxTokens, json: true });
+  const text = await complete(env, userId, 'generate', messages, { maxTokens, json: true, effort });
   let raw: unknown;
   try {
     raw = extractJson(text);
@@ -153,10 +162,11 @@ export async function handleGenerate(env: AiEnv, userId: string, b: Record<strin
       : kind === 'quiz' ? { items: parseQuiz(raw) }
         : kind === 'article' ? { article: parseArticle(raw) }
           : kind === 'diagram' ? { diagram: parseDiagram(raw) }
-            : { topics: parsePlan(raw) };
+            : kind === 'topics' ? { topics: parseTopics(raw) }
+              : { topics: parsePlan(raw) };
   const r = result as { items?: unknown[]; topics?: unknown[] };
   const produced = r.items?.length ?? r.topics?.length ?? 1;
-  await logGeneration(env, userId, kind === 'cards' ? 'gen_cards' : kind === 'quiz' ? 'gen_questions' : kind === 'plan' ? 'plan' : 'primer', version, modelFor(env, 'generate'), produced, messages.reduce((n, m) => n + m.content.length, 0), text.length, started);
+  await logGeneration(env, userId, kind === 'cards' ? 'gen_cards' : kind === 'quiz' ? 'gen_questions' : kind === 'plan' || kind === 'topics' ? 'plan' : 'primer', version, modelFor(env, 'generate'), produced, messages.reduce((n, m) => n + m.content.length, 0), text.length, started);
   return { kind, promptVersion: version, ...result };
 }
 

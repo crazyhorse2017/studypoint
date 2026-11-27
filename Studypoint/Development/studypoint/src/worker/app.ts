@@ -21,7 +21,17 @@ import { handleAnswer, handleAnswerStream, handleEmbed, handleGenerate, handleGr
 import { LookupError, trustedSearch } from './ai/lookup.ts';
 import { IndexError, MAX_INDEX_BYTES, getIndex, listIndexes, putIndex } from './aiIndex.ts';
 import { QuizError, createQuiz, getQuiz, hideQuiz, listQuizzes, submitQuiz } from './quizzes.ts';
+import { MAX_PLAN_CHARS, PlanError, cardReviewStats, deletePlan, getPlan, listPlans, savePlan } from './studyPlans.ts';
 import { ConversationError, MAX_MESSAGE_CHARS, addMessages, createConversation, deleteConversation, getConversation, listConversations, renameConversation } from './conversations.ts';
+
+async function planCall(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof PlanError) return apiError(err.status, err.status === 409 ? 'conflict' : 'plan_error', err.message);
+    throw err;
+  }
+}
 
 async function conversationCall(fn: () => Promise<Response>): Promise<Response> {
   try {
@@ -289,11 +299,54 @@ export const ROUTES: readonly Route[] = [
   aiRoute('/api/ai/generate', (env, u, b) => handleGenerate(env, u, b)),
   aiRoute('/api/ai/validate', (env, u, b) => handleValidate(env, u, b)),
   aiRoute('/api/ai/grade', (env, u, b) => handleGrade(env, u, b)),
-  aiRoute('/api/lookup', async (env, _u, b) => ({ results: await trustedSearch(env.TAVILY_API_KEY, b['query']), configured: Boolean(env.TAVILY_API_KEY) })),
+  aiRoute('/api/lookup', async (env, _u, b) => ({ results: await trustedSearch(env.TAVILY_API_KEY, b['query'], fetch, { raw: b['raw'] === true }), configured: Boolean(env.TAVILY_API_KEY) })),
   {
     method: 'GET',
     path: '/api/ai/status',
     handler: ({ env }) => json({ ai: Boolean(env.AI && env.AI_MODELS), lookup: Boolean(env.TAVILY_API_KEY), files: Boolean(env.FILES) }),
+  },
+  {
+    // Step 6b (A26): study plans, one per course. The payload is ciphertext; the stage is in the clear.
+    method: 'GET',
+    path: '/api/plans',
+    handler: async ({ env, userId }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ plans: await listPlans(env.DB, userId) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/plans/:courseId',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ plan: await getPlan(env.DB, userId, params['courseId'] ?? '') });
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/plans/:courseId',
+    handler: async ({ request, env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      const db = env.DB;
+      return withJson(request, (b) => planCall(async () => json({ plan: await savePlan(db, userId, params['courseId'] ?? '', b) })), MAX_PLAN_CHARS + 16 * 1024);
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/plans/:courseId',
+    handler: async ({ env, userId, params }) => {
+      if (!env.DB || !userId) return needsDb();
+      return json({ deleted: await deletePlan(env.DB, userId, params['courseId'] ?? '') });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/plans/:courseId/review-stats',
+    handler: async ({ env, userId, params, url }) => {
+      if (!env.DB || !userId) return needsDb();
+      const since = Number(url.searchParams.get('since'));
+      return json({ stats: await cardReviewStats(env.DB, userId, params['courseId'] ?? '', Number.isFinite(since) && since > 0 ? since : Date.now() - 14 * 86_400_000) });
+    },
   },
   {
     // Step 6a (AST-06): saved conversations. Titles and messages are ciphertext.

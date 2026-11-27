@@ -7,6 +7,7 @@ import { checkCard, checkQuestion, type Checked, type GenCard, type PassageText,
 import type { CardPayload } from '../../shared/cards.ts';
 import { generateArticle, generateCards, generateDiagram, generateQuiz, validateItems, type SentPassage } from './aiApi.ts';
 import { searchCourse, type CourseIndex } from './indexer.ts';
+import { batchPlan, inParallel } from '../../shared/batching.ts';
 
 export type TopicPassages = { sent: SentPassage[]; texts: PassageText[]; sourcesNote: string };
 
@@ -77,22 +78,72 @@ async function reviewed<T>(items: T[], check: (i: T) => Checked<T>, kind: 'cards
   return { accepted, rejected };
 }
 
+// ------------------------------------------------------------------ speed (step 6b) --
+// Larger requests are split into parallel batches (shared/batching.ts); each batch is checked as soon as
+// it's back.
+
+const PARALLEL = 4;
+export { inParallel };
+
+const subset = (tp: TopicPassages, idx: readonly number[]): TopicPassages => {
+  const keep = new Set(idx);
+  const sent = tp.sent.filter((_, i) => keep.has(i));
+  return { sent, texts: tp.texts.filter((_, i) => keep.has(i)), sourcesNote: tp.sourcesNote };
+};
+
+/**
+ * Batches that fail are skipped as long as one succeeds (a slow or busy model shouldn't lose the rest);
+ * if every batch fails, the first error is shown.
+ */
+async function allBatches<R>(plans: Array<{ count: number; passageIdx: number[] }>, run: (b: { count: number; passageIdx: number[] }) => Promise<R>): Promise<R[]> {
+  const results = await inParallel(plans, PARALLEL, async (b) => {
+    try {
+      return { ok: true as const, value: await run(b) };
+    } catch (error) {
+      return { ok: false as const, error };
+    }
+  });
+  const good = results.flatMap((r) => (r.ok ? [r.value] : []));
+  const bad = results.find((r) => !r.ok);
+  if (good.length === 0 && bad && !bad.ok) throw bad.error;
+  return good;
+}
+
+/** Drop near-duplicate items (same normalised question text). */
+function dedupe<T>(items: T[], keyOf: (t: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((it) => {
+    const k = keyOf(it).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 export async function makeCards(tp: TopicPassages, topic: string, count: number, types: string[]): Promise<ReviewedCards> {
-  const { items } = await generateCards(tp.sent, topic, count, types);
-  const r = await reviewed(items, (c) => checkCard(c, tp.texts), 'cards', tp);
-  return { accepted: r.accepted.map((card) => ({ card, payload: toPayload(card) })), rejected: r.rejected.map((x) => ({ card: x.item, reasons: x.reasons })) };
+  const batches = await allBatches(batchPlan(count, tp.sent.length), async (b) => {
+    const part = subset(tp, b.passageIdx);
+    const { items } = await generateCards(part.sent, topic, b.count, types);
+    return reviewed(items, (c) => checkCard(c, tp.texts), 'cards', part);
+  });
+  const accepted = dedupe(batches.flatMap((r) => r.accepted), (c) => (c.kind === 'cloze' ? c.text : c.front));
+  return { accepted: accepted.map((card) => ({ card, payload: toPayload(card) })), rejected: batches.flatMap((r) => r.rejected).map((x) => ({ card: x.item, reasons: x.reasons })) };
 }
 
 export async function makeQuiz(tp: TopicPassages, topic: string, count: number, formats: string[], difficulty: number) {
-  const { items } = await generateQuiz(tp.sent, topic, count, formats, difficulty);
-  return reviewed<QuizQuestion>(items, (q) => checkQuestion(q, tp.texts), 'quiz', tp);
+  const batches = await allBatches(batchPlan(count, tp.sent.length), async (b) => {
+    const part = subset(tp, b.passageIdx);
+    const { items } = await generateQuiz(part.sent, topic, b.count, formats, difficulty);
+    return reviewed<QuizQuestion>(items, (q) => checkQuestion(q, tp.texts), 'quiz', part);
+  });
+  return { accepted: dedupe(batches.flatMap((r) => r.accepted), (q) => q.stem), rejected: batches.flatMap((r) => r.rejected) };
 }
 
 /** A study guide as Markdown, with its sources listed at the end and an AI label at the top. */
-export async function makeArticle(tp: TopicPassages, topic: string, length: 'short' | 'medium'): Promise<{ title: string; markdown: string }> {
+export async function makeArticle(tp: TopicPassages, topic: string, length: 'short' | 'medium', from = 'your own material'): Promise<{ title: string; markdown: string }> {
   const { article } = await generateArticle(tp.sent, topic, length);
   const title = article.title || topic;
-  const markdown = `# ${title}\n\n> Made by Studyflare’s AI from your own material. Check anything important against the sources listed at the end.\n\n${article.markdown.replace(/^#\s.*\n/, '')}\n\n## Sources\n\n${tp.sourcesNote}\n`;
+  const markdown = `# ${title}\n\n> Made by Studyflare’s AI from ${from}. Check anything important against the sources listed at the end.\n\n${article.markdown.replace(/^#\s.*\n/, '')}\n\n## Sources\n\n${tp.sourcesNote}\n`;
   return { title, markdown };
 }
 

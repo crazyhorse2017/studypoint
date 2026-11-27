@@ -78,16 +78,20 @@ export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: stri
  */
 const EFFORT: Record<Exclude<AiTask, 'embed' | 'ocr'>, 'low' | 'medium'> = { answer: 'medium', generate: 'medium', validate: 'low', grade: 'low' };
 const REASONING_ROOM = 3000;
+const REASONING_ROOM_LOW = 1500;
 
 /** One text completion. `json` asks for a JSON object (parsed and validated by the caller). */
-export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask, 'embed' | 'ocr'>, messages: ChatMessage[], opts: { maxTokens?: number; json?: boolean } = {}): Promise<string> {
+export async function complete(env: AiEnv, userId: string, task: Exclude<AiTask, 'embed' | 'ocr'>, messages: ChatMessage[], opts: { maxTokens?: number; json?: boolean; effort?: 'low' | 'medium' } = {}): Promise<string> {
   const model = modelFor(env, task);
+  const effort = opts.effort ?? EFFORT[task];
   let res: unknown;
   try {
     res = await ai(env).run(model as keyof AiModels, {
       messages,
-      max_tokens: (opts.maxTokens ?? 2048) + REASONING_ROOM,
-      reasoning_effort: EFFORT[task],
+      // Asking for low effort on a writing task thinks less, so it needs less room (and answers faster).
+      // The checker/grader keep the full room: gpt-oss-20b returned empty replies without it.
+      max_tokens: (opts.maxTokens ?? 2048) + (opts.effort === 'low' ? REASONING_ROOM_LOW : REASONING_ROOM),
+      reasoning_effort: effort,
       temperature: task === 'generate' ? 0.4 : 0.2,
       ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
     } as never);

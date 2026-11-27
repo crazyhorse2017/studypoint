@@ -3,7 +3,7 @@
 
 import { ApiError, api } from '../api.ts';
 import { parseAnswerStreamLine } from '../../shared/sseText.ts';
-import type { Article, Diagram, GenCard, Grade, PlanTopic, QuizQuestion, Verdict } from '../../shared/aiOutput.ts';
+import type { Article, Diagram, GenCard, Grade, PlanTopic, QuizQuestion, Verdict, WebTopic } from '../../shared/aiOutput.ts';
 /** A trusted web result (the Worker already checked it against the allowlist). */
 export type WebResult = { url: string; title: string; content: string; score: number };
 
@@ -92,4 +92,5 @@ export const generateDiagram = (passages: SentPassage[], topic: string) => api<{
 export const generatePlan = (outline: string, courseName: string) => api<{ topics: PlanTopic[] }>('POST', '/api/ai/generate', { kind: 'plan', outline, courseName });
 export const validateItems = (kind: 'cards' | 'quiz', items: unknown[], passages: SentPassage[]) => api<{ verdicts: Verdict[] }>('POST', '/api/ai/validate', { kind, items, passages });
 export const gradeShort = (stem: string, answer: string, rubric: string[], response: string) => api<Grade>('POST', '/api/ai/grade', { stem, answer, rubric, response });
-export const webLookup = (query: string) => api<{ results: WebResult[] }>('POST', '/api/lookup', { query });
+export const webLookup = (query: string, raw = false) => api<{ results: WebResult[] }>('POST', '/api/lookup', { query, raw });
+export const generateTopics = (passages: SentPassage[], courseName: string, count: number) => api<{ topics: WebTopic[] }>('POST', '/api/ai/generate', { kind: 'topics', passages, courseName, count });

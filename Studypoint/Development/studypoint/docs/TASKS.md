@@ -67,16 +67,23 @@ There's no Anki or Quizlet import: Studyflare starts blank.
   - Listed in each course's Ask tab, plus all of them on the Ask page.
   - Answers stream sentence by sentence, and each sentence appears only after its citations are verified.
   - A citation opens a **pop-up preview first**, with the quote highlighted. "Open in the file" goes to the page with the quote highlighted (PDF).
-- **6b. Worked problems:**
+- **6b. Automatic practice test + study plan, and faster AI** *(built 2026-11-27, A26; added by Alex)*. Alex's answers:
+  - **When:** a test is made right away when a course is added, from **trusted websites**. Once the course has enough processed files, the files are used instead.
+  - **Size:** **20 questions** (~25 min).
+  - **Plan:** a **day-by-day schedule to the exam**, **auto-made cards** for weak topics (approved from a tray), **study guides**, and **re-check mini-quizzes**.
+  - **Updates:** it adapts from quizzes and card reviews, with a **weekly check-in test**.
+  - **Speed:** "Suggest a plan", cards and quizzes are faster (low reasoning effort, parallel batches).
+  - **Remaining:** the ai-eval report for the @2 prompts (AGENTS 7), and an end-to-end check on production.
+- **6c. Worked problems:**
   - **WebAssign-style multi-step.** You must type each step's answer and get it right before the next step unlocks.
   - **Limited tries per step**, like WebAssign. Then the step is shown and the card counts as Again.
   - AI makes them from worked examples, **plus new variants** with different numbers, checked by the validator. They can also be written by hand.
   - This needs math answer checking (numeric with tolerance and units, plus equivalent expressions), pulled forward from E2.1.
-- **6c. New versions + source-change flags:**
+- **6d. New versions + source-change flags:**
   - A "Replace with new version" button on each file.
   - Uploading a same-named file into the same course asks whether it's a new version.
   - Cards from changed or removed passages **keep being reviewed with a "source changed" badge**, and a list on Today offers keep, edit, regenerate or retire (T1.22, LIB-10).
-- **6d. Polish:**
+- **6e. Polish:**
   - Ctrl+K command palette and shortcuts (T1.03)
   - Course archiving (T1.24b)
   - Minutes-per-day study budget (T1.20)

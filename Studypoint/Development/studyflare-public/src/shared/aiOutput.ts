@@ -106,6 +106,23 @@ export function parsePlan(raw: unknown): PlanTopic[] {
   }).filter((t) => t.title);
 }
 
+export type WebTopic = { title: string; summary: string };
+
+/** Topics from the web topics prompt (step 6b): up to 12, de-duplicated by title. */
+export function parseTopics(raw: unknown): WebTopic[] {
+  const seen = new Set<string>();
+  const out: WebTopic[] = [];
+  for (const t of arr(obj(raw)['topics'] ?? raw)) {
+    const o = obj(t);
+    const title = str(o['title'] ?? o['name'], 120).trim();
+    const k = title.toLowerCase();
+    if (!title || seen.has(k)) continue;
+    seen.add(k);
+    out.push({ title, summary: str(o['summary'], 400) });
+  }
+  return out.slice(0, 12);
+}
+
 export function parseArticle(raw: unknown): Article {
   const o = obj(raw);
   return { title: str(o['title'], 160), markdown: str(o['markdown'] ?? o['body'], 60_000), sources: arr(o['sources']).map((x) => str(x, 12).toUpperCase()) };

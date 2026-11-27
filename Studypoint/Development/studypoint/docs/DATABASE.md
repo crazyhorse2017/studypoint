@@ -540,6 +540,19 @@ CREATE TABLE backups (
 );
 CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- e.g. ('export_schema_version','1')
 
+-- Added in migration 0010 (2026-11-27): one study plan per course (step 6b, ARCHITECTURE A26). The practice
+-- test, topic scores and day-by-day plan are ONE encrypted payload (AAD "<course id>#plan"); only the stage
+-- is in the clear. `version` is bumped on every save, and a save based on an older version is refused (409).
+CREATE TABLE study_plans (
+  course_id TEXT PRIMARY KEY REFERENCES courses(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage TEXT NOT NULL CHECK (stage IN ('building','test_ready','active','failed')),
+  payload TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 -- Added in migration 0008 (2026-11-27): processed material for AI (step 5, ARCHITECTURE A24). The browser
 -- builds one encrypted bundle per source (passages + vectors) in R2 at index/<user>/<source>; this row
 -- records that it exists and which content fingerprint it was built from.

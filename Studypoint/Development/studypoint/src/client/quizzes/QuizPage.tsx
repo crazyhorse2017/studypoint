@@ -12,6 +12,19 @@ import { fetchQuiz, submitQuiz, type Answered, type Quiz } from './quizApi.ts';
 
 type Result = { score: number; feedback: string | null };
 
+/** Where a question's answer comes from: your material, or (plan tests) a trusted web page, linked. */
+function QuoteSource({ q }: { q: QuizQuestion & { source?: { title: string; url?: string } } }) {
+  const src = q.source;
+  if (src?.url) {
+    return (
+      <span className="text-text-3">
+        From <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2">{src.title}</a>: “{q.quote}”
+      </span>
+    );
+  }
+  return <span className="text-text-3">From your material: “{q.quote}”</span>;
+}
+
 function Question({ n, q, value, onChange, result }: { n: number; q: QuizQuestion; value: unknown; onChange: (v: unknown) => void; result: Result | null }) {
   const locked = result !== null;
   return (
@@ -47,7 +60,7 @@ function Question({ n, q, value, onChange, result }: { n: number; q: QuizQuestio
           {q.format === 'short' ? <span>Model answer: <MathText text={q.answer} /></span> : null}
           {result.feedback ? <span className="text-text-2">{result.feedback}</span> : null}
           {q.explanation ? <span className="text-text-2"><MathText text={q.explanation} /></span> : null}
-          {q.quote ? <span className="text-text-3">From your material: “{q.quote}”</span> : null}
+          {q.quote ? <QuoteSource q={q} /> : null}
         </div>
       ) : null}
     </li>
@@ -102,6 +115,12 @@ export default function QuizPage({ id }: { id: string }) {
     try {
       const score = await submitQuiz(quiz.id, records);
       toast.show({ message: `Score: ${Math.round(score * 100)}%` });
+      // Step 6b: if this is a study plan's test or mini-quiz, update the topic scores and the plan.
+      void import('../plans/planBuilder.ts')
+        .then((m) => m.recordQuizInPlan(quiz, records))
+        .then(() => import('../plans/planJobs.ts'))
+        .then((m) => m.kickPlansSoon())
+        .catch(() => toast.show({ message: 'Your study plan couldn’t be updated from this quiz. Try reloading.', tone: 'error' }));
     } catch (e) {
       toast.show({ message: e instanceof Error ? `Your score couldn’t be saved: ${e.message}` : 'Your score couldn’t be saved.', tone: 'error' });
     } finally {
@@ -119,7 +138,7 @@ export default function QuizPage({ id }: { id: string }) {
       <div className="flex flex-col gap-1">
         <Link to={`/courses/${quiz.courseId}?tab=quizzes`} className="text-sm text-text-2 hover:text-accent">← Quizzes</Link>
         <h1 className="text-[2.125rem] leading-tight font-semibold">{quiz.title}</h1>
-        <p className="text-sm text-text-2">{quiz.count} questions · AI-made from your material, checked before saving</p>
+        <p className="text-sm text-text-2">{quiz.count} questions · {quiz.questions.some((x) => (x.question as { source?: { url?: string } } | null)?.source?.url) ? 'AI-made from trusted web pages' : 'AI-made from your material'}, checked before saving</p>
       </div>
       <ol className="flex flex-col gap-4">
         {quiz.questions.map((item, i) =>

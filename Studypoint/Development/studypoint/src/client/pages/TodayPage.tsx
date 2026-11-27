@@ -7,6 +7,7 @@ import { Link } from '../Link.tsx';
 import { useStudy } from '../studyStore.ts';
 import { fetchSummary, type Summary } from '../cards/cardsApi.ts';
 import { planDailyBudget } from '../../shared/budget.ts';
+import { TodayPlans } from '../plans/TodayPlans.tsx';
 
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -77,6 +78,8 @@ export function TodayPage() {
           )
         ) : null}
       </section>
+
+      <TodayPlans label={label} />
 
       {summary && summary.exams.length > 0 ? (
         <section aria-labelledby="exams-heading" className="flex flex-col gap-3">
